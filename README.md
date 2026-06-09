@@ -27,3 +27,7 @@ Seq 1: estrutura do repositorio e `.gitignore`.
 ## Fluxo Git
 
 O fluxo de branches e commits esta documentado em `docs/git-workflow.md`.
+
+## Rodar Localmente
+
+O passo a passo para subir a infraestrutura e rodar os servicos esta em `docs/run-locally.md`.
