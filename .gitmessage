@@ -1,0 +1,9 @@
+tipo(escopo): descricao curta
+
+# Exemplos:
+# feat(auction-service): create load endpoint
+# chore(infra): add postgres migrations
+# docs(git): add workflow guide
+#
+# Tipos:
+# feat, fix, docs, chore, test, refactor
