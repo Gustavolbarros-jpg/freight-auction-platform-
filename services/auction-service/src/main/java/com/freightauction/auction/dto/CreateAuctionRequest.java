@@ -5,12 +5,12 @@ import jakarta.validation.constraints.NotNull;
 
 import java.util.UUID;
 
-public record CreateAuctionRequest (
+public record CreateAuctionRequest(
+        @NotNull(message = "loadId é obrigatório")
+        UUID loadId,
 
-    @NotNull(message = "loadId é obrigatório")
-    UUID loadId,
-
-    @NotNull
-    @Min(1)
-    Integer durationMinutes
-){}
+        @NotNull
+        @Min(1)
+        Integer durationMinutes
+) {
+}

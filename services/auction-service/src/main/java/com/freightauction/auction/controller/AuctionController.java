@@ -8,10 +8,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("v1/auctions")
+@RequestMapping("/v1/auctions")
 public class AuctionController {
     private final AuctionService auctionService;
 
@@ -24,8 +25,25 @@ public class AuctionController {
             @Valid @RequestBody CreateAuctionRequest request,
             @RequestHeader("X-User-Id") UUID createdByUserId
     ) {
-        AuctionResponse response = auctionService.create(request, createdByUserId);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(auctionService.create(request, createdByUserId));
+    }
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    @GetMapping
+    public ResponseEntity<List<AuctionResponse>> findAll() {
+        return ResponseEntity.ok(auctionService.findAll());
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<AuctionResponse> findById(@PathVariable UUID id) {
+        return ResponseEntity.ok(auctionService.findById(id));
+    }
+
+    @PatchMapping("/{id}/close")        // PATCH porque é uma mudança parcial de estado
+    public ResponseEntity<AuctionResponse> close(
+            @PathVariable UUID id,
+            @RequestHeader("X-User-Id") UUID userId
+    ) {
+        return ResponseEntity.ok(auctionService.close(id));
     }
 }

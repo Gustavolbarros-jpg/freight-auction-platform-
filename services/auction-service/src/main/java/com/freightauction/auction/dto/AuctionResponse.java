@@ -6,13 +6,13 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-public record AuctionResponse (
-
-    UUID id,
-    UUID loadId,
-    AuctionStatus status,
-    BigDecimal initialPrice,
-    LocalDateTime startedAt,
-    LocalDateTime closedAt,
-    UUID createdByUserId
-){}
+public record AuctionResponse(
+        UUID id,
+        UUID loadId,
+        AuctionStatus status,
+        BigDecimal initialPrice,
+        LocalDateTime startedAt,
+        LocalDateTime closedAt,
+        UUID createdByUserId
+) {
+}

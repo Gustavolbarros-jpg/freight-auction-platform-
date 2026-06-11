@@ -3,37 +3,29 @@ package com.freightauction.auction.mapper;
 import com.freightauction.auction.domain.Load;
 import com.freightauction.auction.dto.CreateLoadRequest;
 import com.freightauction.auction.dto.LoadResponse;
-import org.springframework.stereotype.Component;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-@Component
-public class LoadMapper {
+@Mapper(
+        componentModel = "spring",
+        imports = {UUID.class, LocalDateTime.class}
+)
+public interface LoadMapper {
+    @Mapping(target = "id", expression = "java(UUID.randomUUID())")
+    @Mapping(target = "createdByUserId", source = "createdByUserId")
+    @Mapping(target = "createdAt", expression = "java(LocalDateTime.now())")
+    Load toEntity(CreateLoadRequest request, UUID createdByUserId);
 
-    public Load toEntity(CreateLoadRequest request, UUID createdByUserId) {
-        return Load.builder()
-                .id(UUID.randomUUID())
-                .origin(request.origin())
-                .destination(request.destination())
-                .description(request.description())
-                .weightKg(request.weightKg())
-                .initialPrice(request.initialPrice())
-                .createdByUserId(createdByUserId)
-                .createdAt(LocalDateTime.now())
-                .build();
-    }
+    LoadResponse toResponse(Load load);
 
-    public LoadResponse toResponse(Load load) {
-        return new LoadResponse(
-                load.getId(),
-                load.getOrigin(),
-                load.getDestination(),
-                load.getDescription(),
-                load.getWeightKg(),
-                load.getInitialPrice(),
-                load.getCreatedByUserId(),
-                load.getCreatedAt()
-        );
-    }
+    // atualiza os campos de uma Load já existente com os dados do request
+    @Mapping(target = "id", ignore = true)  // nunca muda o id
+    @Mapping(target = "createdByUserId", ignore = true)  // nunca muda quem criou
+    @Mapping(target = "createdAt", ignore = true)
+    // nunca muda a data de criação
+    void updateEntity(CreateLoadRequest request, @MappingTarget Load load);
 }
