@@ -1,4 +1,5 @@
 services:
+
   postgres:
     image: postgres:16
     environment:
@@ -14,9 +15,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-  redis:
-    image: redis  
+    networks:
+      - leilao_net
 
+  redis:
+    image: redis
     ports:
       - "6379:6379"
     healthcheck:
@@ -24,6 +27,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
   rabbitmq:
     image: rabbitmq:3-management
     environment:
@@ -37,6 +41,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+
   mongo:
     image: mongo
     environment:
@@ -44,6 +49,21 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: example
     ports:
       - "27017:27017"
+
+  auction-service:
+    build:
+      context: ./services/auction-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/freight_auction
+      SPRING_DATASOURCE_USERNAME: freight_user
+      SPRING_DATASOURCE_PASSWORD: example
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - leilao_net
 
 networks:
   leilao_net:
