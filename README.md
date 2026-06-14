@@ -33,6 +33,48 @@ Tambem existem arquivos de infraestrutura e documentacao em:
 - `infra/postgres/migrations`
 - `docs`
 
+## Decisoes Tecnologicas
+
+A arquitetura foi pensada como uma plataforma distribuida baseada em microsservicos, com comunicacao HTTP para operacoes sincronas e mensageria para operacoes assincronas.
+
+Tecnologias escolhidas:
+
+- Java 21 com Spring Boot para `auction-service` e `bid-service`: escolha feita por oferecer suporte maduro para APIs REST, validacao de entrada, configuracao por ambiente, integracao com banco relacional, RabbitMQ e Redis.
+- Node.js para `notification-service`: escolha feita por se encaixar bem no modelo de conexoes WebSocket e notificacoes em tempo real.
+- PostgreSQL para dados persistentes: usado para entidades que precisam sobreviver ao ciclo de vida dos servicos, como cargas, leiloes e futuramente historico de lances.
+- RabbitMQ para fila de lances: usado para desacoplar o recebimento HTTP do processamento dos lances e preservar a ordem de chegada no consumidor.
+- Redis para estado rapido em memoria: usado para consultar rapidamente o melhor lance atual de cada leilao.
+- Docker Compose para ambiente local: usado para subir os servicos e dependencias de forma padronizada.
+
+Essas escolhas se encaixam na arquitetura de alto nivel porque separam responsabilidades, permitem evoluir cada servico de forma independente e usam fila/cache para lidar com concorrencia e estado compartilhado.
+
+## Estrutura de Pastas
+
+```text
+.
+├── docker-compose.yml
+├── docs
+├── infra
+│   └── postgres
+│       └── migrations
+└── services
+    ├── auction-service
+    ├── bid-service
+    └── notification-service
+```
+
+## Atendimento da Entrega 1
+
+Checklist da fase de Arquitetura e Escopo:
+
+- Decisao tecnologica documentada: descrita na secao `Decisoes Tecnologicas`.
+- Repositorio GitHub organizado: estrutura separada por `services`, `infra` e `docs`.
+- README minimo: contem descricao do projeto, tecnologias, estrutura, instrucoes de execucao e fluxo principal.
+- Modelagem do estado central em memoria: o melhor lance atual fica no Redis usando a chave `auction:{auctionId}:best_bid`.
+- Protocolo de comunicacao definido: endpoints HTTP e mensagens RabbitMQ documentados nas secoes de fluxo e endpoints.
+- Servidor base rodando em porta fixada: `auction-service` usa `8081`, `bid-service` usa `8082` e `notification-service` usa `8083`.
+- Validacoes basicas: os DTOs usam validacoes como campos obrigatorios, UUIDs e valores numericos para cargas, leiloes e lances.
+
 ## Fluxo de Lances
 
 O fluxo principal implementado na entrega e:
@@ -55,6 +97,41 @@ O melhor lance fica salvo no Redis na chave:
 
 ```text
 auction:{auctionId}:best_bid
+```
+
+O valor e armazenado no formato:
+
+```text
+amount|bidId|carrierId|receivedAt
+```
+
+Essa e a modelagem atual do estado central em memoria para a disputa de lances. O Redis guarda apenas o melhor lance atual por leilao, permitindo resposta rapida para consulta e evitando recalcular o vencedor a cada requisicao.
+
+## Protocolo de Comunicacao
+
+O projeto define dois tipos principais de comunicacao:
+
+- HTTP/JSON para chamadas externas e consultas.
+- RabbitMQ para eventos assincronos de lances.
+
+Contrato do evento publicado na fila:
+
+```json
+{
+  "bidId": "6bb45715-266c-4b7a-b111-87e0758ff4b1",
+  "auctionId": "11111111-1111-1111-1111-111111111111",
+  "carrierId": "22222222-2222-2222-2222-222222222222",
+  "amount": 900.00,
+  "receivedAt": "2026-06-14T22:23:50Z"
+}
+```
+
+Configuracao RabbitMQ:
+
+```text
+Exchange: bid.exchange
+Queue: bid.placed.queue
+Routing key: bid.placed
 ```
 
 ## Endpoints Principais
