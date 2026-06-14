@@ -1,4 +1,5 @@
 services:
+
   postgres:
     image: postgres:16
     environment:
@@ -9,11 +10,26 @@ services:
       - leilao_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
-  redis:
-    image: redis  
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U freight_user -d freight_auction"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - leilao_net
 
+  redis:
+    image: redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - leilao_net
+
   rabbitmq:
     image: rabbitmq:3-management
     environment:
@@ -22,6 +38,14 @@ services:
     ports:
       - "15672:15672"
       - "5672:5672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - leilao_net
+
   mongo:
     image: mongo
     environment:
@@ -29,10 +53,62 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: example
     ports:
       - "27017:27017"
+    networks:
+      - leilao_net
+
+  auction-service:
+    build:
+      context: ./services/auction-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/freight_auction
+      SPRING_DATASOURCE_USERNAME: freight_user
+      SPRING_DATASOURCE_PASSWORD: example
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - leilao_net
+
+  bid-service:
+    build:
+      context: ./services/bid-service
+    ports:
+      - "8082:8082"
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: user
+      RABBITMQ_PASSWORD: password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - leilao_net
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+    ports:
+      - "8083:8083"
+    environment:
+      WS_PORT: 8083
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - leilao_net
+
+networks:
+  leilao_net:
+    driver: bridge
 
 volumes:
   leilao_data:
-
-
-
-  
