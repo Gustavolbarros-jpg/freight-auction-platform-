@@ -71,6 +71,26 @@ services:
     networks:
       - leilao_net
 
+  bid-service:
+    build:
+      context: ./services/bid-service
+    ports:
+      - "8082:8082"
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: user
+      RABBITMQ_PASSWORD: password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - leilao_net
+
   notification-service:
     build:
       context: ./services/notification-service
