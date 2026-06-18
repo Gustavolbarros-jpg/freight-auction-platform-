@@ -65,8 +65,14 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/freight_auction
       SPRING_DATASOURCE_USERNAME: freight_user
       SPRING_DATASOURCE_PASSWORD: example
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: user
+      RABBITMQ_PASSWORD: password
     depends_on:
       postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     networks:
       - leilao_net

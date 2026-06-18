@@ -52,7 +52,7 @@ public class AuctionService {
         auctionEventPublisher.publishAuctionOpened(new AuctionOpenedEvent(
                 saved.getId(),
                 "OPEN",
-                java.math.BigDecimal.ZERO
+                saved.getLoad().getInitialPrice()
         ));
 
         return auctionMapper.toResponse(saved);
