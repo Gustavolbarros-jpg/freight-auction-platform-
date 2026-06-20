@@ -4,11 +4,13 @@ import com.freightauction.bid.dto.BidAcceptedResponse;
 import com.freightauction.bid.dto.CreateBidRequest;
 import com.freightauction.bid.event.BidPlacedEvent;
 import com.freightauction.bid.messaging.BidEventPublisher;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class BidService {
 
@@ -21,6 +23,7 @@ public class BidService {
     }
 
     public BidAcceptedResponse placeBid(CreateBidRequest request) {
+        log.info("Queueing bid: auctionId={}, carrierId={}, amount={}", request.auctionId(), request.carrierId(), request.amount());
         UUID bidId = UUID.randomUUID();
         Instant receivedAt = Instant.now();
 
@@ -33,6 +36,7 @@ public class BidService {
         );
 
         bidEventPublisher.publish(event);
+        log.info("Bid queued: bidId={}, auctionId={}, carrierId={}, amount={}", bidId, request.auctionId(), request.carrierId(), request.amount());
 
         return new BidAcceptedResponse(bidId, ACCEPTED_STATUS, receivedAt);
     }
