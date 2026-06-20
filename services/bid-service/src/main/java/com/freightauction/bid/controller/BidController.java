@@ -6,6 +6,7 @@ import com.freightauction.bid.dto.CreateBidRequest;
 import com.freightauction.bid.service.BestBidService;
 import com.freightauction.bid.service.BidService;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/bids")
 public class BidController {
@@ -32,11 +34,13 @@ public class BidController {
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
     public BidAcceptedResponse create(@Valid @RequestBody CreateBidRequest request) {
+        log.info("Request received: POST /bids, auctionId={}, carrierId={}, amount={}", request.auctionId(), request.carrierId(), request.amount());
         return bidService.placeBid(request);
     }
 
     @GetMapping("/auctions/{auctionId}/best")
     public BestBidResponse findBestBid(@PathVariable UUID auctionId) {
+        log.info("Request received: GET /bids/auctions/{auctionId}/best, auctionId={}", auctionId);
         return bestBidService.findBestBid(auctionId);
     }
 }

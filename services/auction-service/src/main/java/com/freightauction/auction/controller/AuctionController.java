@@ -4,6 +4,7 @@ import com.freightauction.auction.dto.AuctionResponse;
 import com.freightauction.auction.dto.CreateAuctionRequest;
 import com.freightauction.auction.service.AuctionService;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/v1/auctions")
 public class AuctionController {
@@ -25,17 +27,20 @@ public class AuctionController {
             @Valid @RequestBody CreateAuctionRequest request,
             @RequestHeader("X-User-Id") UUID createdByUserId
     ) {
+        log.info("Request received: POST /v1/auctions, loadId={}, createdByUserId={}", request.loadId(), createdByUserId);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(auctionService.create(request, createdByUserId));
     }
 
     @GetMapping
     public ResponseEntity<List<AuctionResponse>> findAll() {
+        log.info("Request received: GET /v1/auctions");
         return ResponseEntity.ok(auctionService.findAll());
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<AuctionResponse> findById(@PathVariable UUID id) {
+        log.info("Request received: GET /v1/auctions/{id}, auctionId={}", id);
         return ResponseEntity.ok(auctionService.findById(id));
     }
 
@@ -44,6 +49,7 @@ public class AuctionController {
             @PathVariable UUID id,
             @RequestHeader("X-User-Id") UUID userId
     ) {
+        log.info("Request received: PATCH /v1/auctions/{id}/close, auctionId={}, userId={}", id, userId);
         return ResponseEntity.ok(auctionService.close(id));
     }
 }
