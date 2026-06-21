@@ -26,8 +26,15 @@ public class BestBidService {
         String key = "auction:%s:best_bid".formatted(event.auctionId());
         String currentBestBid = redisTemplate.opsForValue().get(key);
 
-        if (currentBestBid == null || event.amount().compareTo(extractAmount(currentBestBid)) < 0) {
+        if (currentBestBid == null
+                || event.amount().compareTo(extractAmount(currentBestBid)) < 0) {
+
             redisTemplate.opsForValue().set(key, serialize(event));
+
+            redisTemplate.convertAndSend(
+                    "bid.validated",
+                    serializeNotification(event)
+            );
         }
     }
 
@@ -59,5 +66,23 @@ public class BestBidService {
                 + FIELD_SEPARATOR + event.bidId()
                 + FIELD_SEPARATOR + event.carrierId()
                 + FIELD_SEPARATOR + event.receivedAt();
+    }
+
+    private String serializeNotification(BidPlacedEvent event) {
+        return """
+                {
+                  "auctionId": "%s",
+                  "bidId": "%s",
+                  "carrierId": "%s",
+                  "amount": %s,
+                  "receivedAt": "%s"
+                }
+                """.formatted(
+                event.auctionId(),
+                event.bidId(),
+                event.carrierId(),
+                event.amount(),
+                event.receivedAt()
+        );
     }
 }

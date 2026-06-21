@@ -9,6 +9,7 @@ import com.freightauction.auction.mapper.AuctionMapper;
 import com.freightauction.auction.repository.AuctionRepository;
 import com.freightauction.auction.repository.LoadRepository;
 import jakarta.transaction.Transactional;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -20,13 +21,16 @@ public class AuctionService {
     private final AuctionRepository auctionRepository;
     private final LoadRepository loadRepository;       // para buscar a Load pelo id
     private final AuctionMapper auctionMapper;
+    private final StringRedisTemplate redisTemplate;
 
     public AuctionService(AuctionRepository auctionRepository,
                           LoadRepository loadRepository,
-                          AuctionMapper auctionMapper) {
+                          AuctionMapper auctionMapper,
+                          StringRedisTemplate redisTemplate) {
         this.auctionRepository = auctionRepository;
         this.loadRepository = loadRepository;
         this.auctionMapper = auctionMapper;
+        this.redisTemplate = redisTemplate;
     }
 
     @Transactional
@@ -66,12 +70,33 @@ public class AuctionService {
         auction.setStatus(AuctionStatus.CLOSED);
         auction.setClosedAt(LocalDateTime.now());
 
-        return auctionMapper.toResponse(auctionRepository.save(auction));
+        Auction saved = auctionRepository.save(auction);
+
+        redisTemplate.convertAndSend(
+                "auction.closed",
+                serializeClosedAuction(saved)
+        );
+
+        return auctionMapper.toResponse(saved);
     }
 
     private Auction findAuctionOrThrow(UUID id) {
         return auctionRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Auction not found: " + id));
+    }
+
+    private String serializeClosedAuction(Auction auction) {
+        return """
+                {
+                  "auctionId": "%s",
+                  "status": "%s",
+                  "closedAt": "%s"
+                }
+                """.formatted(
+                auction.getId(),
+                auction.getStatus(),
+                auction.getClosedAt()
+        );
     }
 
 }
