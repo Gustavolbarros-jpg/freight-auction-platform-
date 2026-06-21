@@ -10,24 +10,29 @@ import com.freightauction.auction.repository.AuctionRepository;
 import com.freightauction.auction.repository.LoadRepository;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+
 @Slf4j
 @Service
 public class AuctionService {
     private final AuctionRepository auctionRepository;
     private final LoadRepository loadRepository;       // para buscar a Load pelo id
     private final AuctionMapper auctionMapper;
+    private final StringRedisTemplate redisTemplate;
 
     public AuctionService(AuctionRepository auctionRepository,
                           LoadRepository loadRepository,
-                          AuctionMapper auctionMapper) {
+                          AuctionMapper auctionMapper,
+                          StringRedisTemplate redisTemplate) {
         this.auctionRepository = auctionRepository;
         this.loadRepository = loadRepository;
         this.auctionMapper = auctionMapper;
+        this.redisTemplate = redisTemplate;
     }
 
     @Transactional
@@ -78,6 +83,12 @@ public class AuctionService {
         auction.setClosedAt(LocalDateTime.now());
 
         Auction saved = auctionRepository.save(auction);
+
+        redisTemplate.convertAndSend(
+                "auction.closed",
+                serializeClosedAuction(saved)
+        );
+
         log.info("Auction closed: auctionId={}, closedAt={}", saved.getId(), saved.getClosedAt());
         return auctionMapper.toResponse(saved);
     }
@@ -88,6 +99,20 @@ public class AuctionService {
                     log.warn("Auction not found: auctionId={}", id);
                     return new IllegalArgumentException("Auction not found: " + id);
                 });
+    }
+
+    private String serializeClosedAuction(Auction auction) {
+        return """
+                {
+                  "auctionId": "%s",
+                  "status": "%s",
+                  "closedAt": "%s"
+                }
+                """.formatted(
+                auction.getId(),
+                auction.getStatus(),
+                auction.getClosedAt()
+        );
     }
 
 }

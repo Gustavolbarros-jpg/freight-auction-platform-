@@ -65,8 +65,12 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/freight_auction
       SPRING_DATASOURCE_USERNAME: freight_user
       SPRING_DATASOURCE_PASSWORD: example
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - leilao_net
