@@ -22,6 +22,7 @@ Servicos implementados ate agora:
 
 - `auction-service`: servico Java/Spring Boot responsavel por cargas e leiloes.
 - `bid-service`: servico Java/Spring Boot responsavel pelo fluxo de lances.
+- `auth-service`: servico Java/Spring Boot responsavel por cadastro, login e tokens JWT.
 - `notification-service`: servico Node.js preparado para notificacoes via WebSocket e Redis Pub/Sub.
 - `postgres`: banco relacional usado pelos servicos que precisam persistir dados.
 - `rabbitmq`: broker de mensagens usado para processar lances em fila.
@@ -38,23 +39,56 @@ Tambem existem arquivos de infraestrutura e documentacao em:
 O fluxo principal implementado na entrega e:
 
 ```text
-POST /bids -> RabbitMQ -> consumer FIFO -> Redis -> GET best bid
+POST /bids autenticado -> valida leilao OPEN -> Postgres -> RabbitMQ -> consumer FIFO -> Redis -> WebSocket
 ```
 
 Na pratica:
 
-1. O cliente envia um lance para `POST /bids`.
-2. O `bid-service` valida a requisicao e publica o evento no RabbitMQ.
-3. O consumidor do `bid-service` le a fila com apenas um consumidor ativo.
-4. Esse processamento sequencial preserva a ordem dos lances na fila.
-5. O servico compara o novo lance com o melhor lance salvo no Redis.
-6. Se o novo lance for menor, ele passa a ser o melhor lance.
-7. Se o lance for igual ou maior, o melhor lance atual continua.
+1. A transportadora faz login e envia um lance com `Authorization: Bearer <token>` para `POST /bids`.
+2. O `bid-service` valida o JWT, extrai a transportadora do token e consulta o `auction-service`.
+3. Se o leilao nao existir ou nao estiver `OPEN`, o lance e recusado e nada e publicado na fila.
+4. Se o leilao estiver aberto, o lance e salvo no Postgres com status inicial `RECEIVED`.
+5. O `bid-service` publica o evento no RabbitMQ.
+6. O consumidor do `bid-service` le a fila com apenas um consumidor ativo, preservando a ordem de processamento.
+7. O servico compara o novo lance com o melhor lance salvo no Redis.
+8. Se o novo lance for menor, ele passa a ser o melhor lance e o canal Redis `bid.validated` e publicado para o `notification-service`.
+9. Se o lance for igual ou maior, o melhor lance atual continua e o lance persistido e marcado como `REJECTED`.
 
 O melhor lance fica salvo no Redis na chave:
 
 ```text
 auction:{auctionId}:best_bid
+```
+
+Ao fechar um leilao com `PATCH /v1/auctions/{id}/close`, o `auction-service` busca o melhor lance em `bid-service`, grava `winnerCarrierId` e `winningAmount`, muda o status para `CLOSED` e publica o evento `auction.closed` no Redis. Depois disso, novos lances para o mesmo leilao retornam conflito (`409`).
+
+## Autenticacao
+
+Os endpoints de escrita usam JWT:
+
+- `ADMIN`: cria cargas, cria leiloes e fecha leiloes.
+- `TRANSPORTADORA`: cria lances.
+
+Criar usuario:
+
+```bash
+curl -X POST http://localhost:8084/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Admin","email":"admin@example.com","password":"senha123","role":"ADMIN"}'
+```
+
+Login:
+
+```bash
+curl -X POST http://localhost:8084/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"senha123"}'
+```
+
+A resposta contem o campo `token`. Use-o nos endpoints protegidos:
+
+```bash
+Authorization: Bearer <token>
 ```
 
 ## Endpoints Principais
@@ -67,10 +101,18 @@ POST /bids
 
 Exemplo:
 
+```bash
+curl -X POST http://localhost:8082/bids \
+  -H "Authorization: Bearer <token-transportadora>" \
+  -H 'Content-Type: application/json' \
+  -d '{"auctionId":"11111111-1111-1111-1111-111111111111","amount":900.00}'
+```
+
+Corpo JSON:
+
 ```json
 {
   "auctionId": "11111111-1111-1111-1111-111111111111",
-  "carrierId": "22222222-2222-2222-2222-222222222222",
   "amount": 900.00
 }
 ```
@@ -82,6 +124,7 @@ Resposta esperada:
 ```
 
 O status `202` indica que o lance foi aceito para processamento assincrono na fila.
+O `carrierId` nao vem mais no corpo: ele e extraido do JWT da transportadora.
 
 ### Consultar melhor lance
 
@@ -90,6 +133,43 @@ GET /bids/auctions/{auctionId}/best
 ```
 
 Retorna o melhor lance salvo no Redis para o leilao informado.
+
+### Criar carga
+
+```bash
+curl -X POST http://localhost:8081/v1/loads \
+  -H "Authorization: Bearer <token-admin>" \
+  -H 'Content-Type: application/json' \
+  -d '{"origin":"Recife","destination":"Olinda","description":"Carga teste","weightKg":100,"initialPrice":1000}'
+```
+
+### Criar leilao
+
+```bash
+curl -X POST http://localhost:8081/v1/auctions \
+  -H "Authorization: Bearer <token-admin>" \
+  -H 'Content-Type: application/json' \
+  -d '{"loadId":"<load-id>","durationMinutes":30}'
+```
+
+### Fechar leilao
+
+```bash
+curl -X PATCH http://localhost:8081/v1/auctions/<auction-id>/close \
+  -H "Authorization: Bearer <token-admin>"
+```
+
+A resposta inclui `winnerCarrierId` e `winningAmount` quando existe lance vencedor.
+
+### WebSocket de notificacoes
+
+Conecte em:
+
+```text
+ws://localhost:8083/?auction=<auction-id>
+```
+
+Quando um melhor lance e validado, chega uma mensagem `bid.validated`. Quando o leilao fecha, chega uma mensagem `auction.closed`.
 
 ## Como Rodar
 
@@ -118,6 +198,7 @@ Portas principais:
 - `auction-service`: `8081`
 - `bid-service`: `8082`
 - `notification-service`: `8083`
+- `auth-service`: `8084`
 - `postgres`: `5432`
 - `rabbitmq`: `5672`
 - `rabbitmq-management`: `15672`
@@ -128,12 +209,18 @@ Portas principais:
 O fluxo do `bid-service` foi validado com Docker:
 
 - Redis e RabbitMQ subiram saudaveis.
+- Postgres subiu saudavel e recebeu as tabelas de usuarios, cargas, leiloes e lances.
+- `auth-service` subiu na porta `8084` e gerou JWT para `ADMIN` e `TRANSPORTADORA`.
 - `bid-service` subiu na porta `8082`.
-- `POST /bids` retornou `202 Accepted`.
+- `POST /bids` sem token retornou erro; com token de transportadora retornou `202 Accepted`.
+- Lances para leilao fechado retornaram `409`.
 - A mensagem foi processada pelo consumer via RabbitMQ.
+- O lance aceito foi persistido na tabela `bids`.
 - O melhor lance foi salvo no Redis.
 - `GET /bids/auctions/{auctionId}/best` retornou o menor lance.
 - Em caso de empate, o primeiro lance processado foi mantido.
+- `PATCH /v1/auctions/{id}/close` gravou vencedor e valor vencedor no leilao.
+- Eventos `bid.validated` e `auction.closed` chegaram ao `notification-service` via Redis Pub/Sub/WebSocket.
 
 ## Documentacao
 
@@ -146,8 +233,8 @@ O fluxo do `bid-service` foi validado com Docker:
 
 Itens que podem entrar nas proximas entregas:
 
-- validar no `bid-service` se o leilao existe antes de aceitar lance;
-- persistir historico de lances em banco;
-- integrar o melhor lance com o `notification-service`;
-- adicionar testes unitarios e testes de integracao com RabbitMQ/Redis;
-- evoluir gateway, autenticacao, frontend e analytics.
+- adicionar um API Gateway para centralizar autenticacao e roteamento;
+- evoluir autorizacao com refresh token e revogacao;
+- adicionar Testcontainers para validar Postgres/RabbitMQ/Redis em pipeline;
+- criar frontend e paineis de acompanhamento dos leiloes;
+- adicionar metricas, tracing e observabilidade distribuida.
