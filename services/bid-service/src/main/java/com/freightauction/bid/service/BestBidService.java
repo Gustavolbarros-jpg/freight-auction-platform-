@@ -24,7 +24,7 @@ public class BestBidService {
         this.redisTemplate = redisTemplate;
     }
 
-    public void process(BidPlacedEvent event) {
+    public boolean process(BidPlacedEvent event) {
         log.info("Processing bid: bidId={}, auctionId={}, carrierId={}, amount={}", event.bidId(), event.auctionId(), event.carrierId(), event.amount());
         String key = "auction:%s:best_bid".formatted(event.auctionId());
         String currentBestBid = redisTemplate.opsForValue().get(key);
@@ -40,8 +40,10 @@ public class BestBidService {
             );
 
             log.info("Best bid updated: bidId={}, auctionId={}, carrierId={}, amount={}", event.bidId(), event.auctionId(), event.carrierId(), event.amount());
+            return true;
         } else {
             log.info("Bid processed without replacing best bid: bidId={}, auctionId={}, amount={}", event.bidId(), event.auctionId(), event.amount());
+            return false;
         }
     }
 

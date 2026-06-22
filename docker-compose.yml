@@ -88,6 +88,9 @@ services:
       RABBITMQ_PASSWORD: password
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/freight_auction
+      SPRING_DATASOURCE_USERNAME: freight_user
+      SPRING_DATASOURCE_PASSWORD: example
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-change-this-development-secret-with-32-chars}
       AUCTION_SERVICE_URL: http://auction-service:8081
     depends_on:
@@ -95,7 +98,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
       auction-service:
+        condition: service_started
+      auth-service:
         condition: service_started
     networks:
       - leilao_net
