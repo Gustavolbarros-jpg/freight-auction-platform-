@@ -22,21 +22,23 @@ public class BidService {
         this.bidEventPublisher = bidEventPublisher;
     }
 
-    public BidAcceptedResponse placeBid(CreateBidRequest request) {
-        log.info("Queueing bid: auctionId={}, carrierId={}, amount={}", request.auctionId(), request.carrierId(), request.amount());
+    public BidAcceptedResponse placeBid(CreateBidRequest request, UUID carrierId) {
+        log.info("Queueing bid: auctionId={}, carrierId={}, amount={}",
+                request.auctionId(), carrierId, request.amount());
         UUID bidId = UUID.randomUUID();
         Instant receivedAt = Instant.now();
 
         BidPlacedEvent event = new BidPlacedEvent(
                 bidId,
                 request.auctionId(),
-                request.carrierId(),
+                carrierId,
                 request.amount(),
                 receivedAt
         );
 
         bidEventPublisher.publish(event);
-        log.info("Bid queued: bidId={}, auctionId={}, carrierId={}, amount={}", bidId, request.auctionId(), request.carrierId(), request.amount());
+        log.info("Bid queued: bidId={}, auctionId={}, carrierId={}, amount={}",
+                bidId, request.auctionId(), carrierId, request.amount());
 
         return new BidAcceptedResponse(bidId, ACCEPTED_STATUS, receivedAt);
     }

@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -33,9 +34,13 @@ public class BidController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
-    public BidAcceptedResponse create(@Valid @RequestBody CreateBidRequest request) {
-        log.info("Request received: POST /bids, auctionId={}, carrierId={}, amount={}", request.auctionId(), request.carrierId(), request.amount());
-        return bidService.placeBid(request);
+    public BidAcceptedResponse create(
+            @Valid @RequestBody CreateBidRequest request,
+            @RequestAttribute("authenticatedUserId") UUID carrierId
+    ) {
+        log.info("Request received: POST /bids, auctionId={}, carrierId={}, amount={}",
+                request.auctionId(), carrierId, request.amount());
+        return bidService.placeBid(request, carrierId);
     }
 
     @GetMapping("/auctions/{auctionId}/best")

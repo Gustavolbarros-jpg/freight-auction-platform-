@@ -25,7 +25,7 @@ public class AuctionController {
     @PostMapping
     public ResponseEntity<AuctionResponse> create(
             @Valid @RequestBody CreateAuctionRequest request,
-            @RequestHeader("X-User-Id") UUID createdByUserId
+            @RequestAttribute("authenticatedUserId") UUID createdByUserId
     ) {
         log.info("Request received: POST /v1/auctions, loadId={}, createdByUserId={}", request.loadId(), createdByUserId);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -47,7 +47,7 @@ public class AuctionController {
     @PatchMapping("/{id}/close")        // PATCH porque é uma mudança parcial de estado
     public ResponseEntity<AuctionResponse> close(
             @PathVariable UUID id,
-            @RequestHeader("X-User-Id") UUID userId
+            @RequestAttribute("authenticatedUserId") UUID userId
     ) {
         log.info("Request received: PATCH /v1/auctions/{id}/close, auctionId={}, userId={}", id, userId);
         return ResponseEntity.ok(auctionService.close(id));
