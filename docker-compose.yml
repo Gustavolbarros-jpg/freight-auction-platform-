@@ -65,8 +65,14 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/freight_auction
       SPRING_DATASOURCE_USERNAME: freight_user
       SPRING_DATASOURCE_PASSWORD: example
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-change-this-development-secret-with-32-chars}
+      BID_SERVICE_URL: http://bid-service:8082
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - leilao_net
@@ -83,10 +89,38 @@ services:
       RABBITMQ_PASSWORD: password
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/freight_auction
+      SPRING_DATASOURCE_USERNAME: freight_user
+      SPRING_DATASOURCE_PASSWORD: example
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-change-this-development-secret-with-32-chars}
+      AUCTION_SERVICE_URL: http://auction-service:8081
     depends_on:
       rabbitmq:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      auction-service:
+        condition: service_started
+      auth-service:
+        condition: service_started
+    networks:
+      - leilao_net
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/freight_auction
+      SPRING_DATASOURCE_USERNAME: freight_user
+      SPRING_DATASOURCE_PASSWORD: example
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-change-this-development-secret-with-32-chars}
+      AUTH_JWT_EXPIRATION_MINUTES: 60
+    depends_on:
+      postgres:
         condition: service_healthy
     networks:
       - leilao_net

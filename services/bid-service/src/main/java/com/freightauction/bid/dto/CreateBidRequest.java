@@ -11,9 +11,6 @@ public record CreateBidRequest(
         UUID auctionId,
 
         @NotNull
-        UUID carrierId,
-
-        @NotNull
         @DecimalMin("0.01")
         BigDecimal amount
 ) {

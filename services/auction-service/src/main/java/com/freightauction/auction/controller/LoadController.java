@@ -24,7 +24,7 @@ public class LoadController {
     @PostMapping
     public ResponseEntity<LoadResponse> create(
             @Valid @RequestBody CreateLoadRequest request,
-            @RequestHeader("X-User-Id") UUID createdByUserId
+            @RequestAttribute("authenticatedUserId") UUID createdByUserId
     ) {
         return ResponseEntity
                 .status(HttpStatus.CREATED)

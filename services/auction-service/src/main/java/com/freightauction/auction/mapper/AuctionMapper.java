@@ -21,7 +21,8 @@ public interface AuctionMapper {
     @Mapping(target = "startedAt", expression = "java(LocalDateTime.now())")
     @Mapping(target = "closedAt", ignore = true)
     @Mapping(target = "createdByUserId", source = "createdByUserId")
-    @Mapping(target = "winnerUserId", ignore = true)
+    @Mapping(target = "winnerCarrierId", ignore = true)
+    @Mapping(target = "winningAmount", ignore = true)
     @Mapping(target = "createdAt", expression = "java(LocalDateTime.now())")
     Auction toEntity(CreateAuctionRequest request, Load load, UUID createdByUserId);
 

@@ -13,6 +13,8 @@ public record AuctionResponse(
         BigDecimal initialPrice,
         LocalDateTime startedAt,
         LocalDateTime closedAt,
-        UUID createdByUserId
+        UUID createdByUserId,
+        UUID winnerCarrierId,
+        BigDecimal winningAmount
 ) {
 }
