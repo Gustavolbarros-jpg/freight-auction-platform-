@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Getter
@@ -36,7 +37,10 @@ public class Auction {
     private UUID createdByUserId;
 
     @Column(name = "winner_user_id")
-    private UUID winnerUserId;
+    private UUID winnerCarrierId;
+
+    @Column(name = "winning_amount", precision = 12, scale = 2)
+    private BigDecimal winningAmount;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

@@ -1,10 +1,12 @@
 package com.freightauction.auction.service;
 
+import com.freightauction.auction.client.BidClient;
 import com.freightauction.auction.domain.Auction;
 import com.freightauction.auction.domain.AuctionStatus;
 import com.freightauction.auction.domain.Load;
 import com.freightauction.auction.dto.AuctionResponse;
 import com.freightauction.auction.dto.CreateAuctionRequest;
+import com.freightauction.auction.dto.BestBidResponse;
 import com.freightauction.auction.mapper.AuctionMapper;
 import com.freightauction.auction.repository.AuctionRepository;
 import com.freightauction.auction.repository.LoadRepository;
@@ -24,15 +26,18 @@ public class AuctionService {
     private final LoadRepository loadRepository;       // para buscar a Load pelo id
     private final AuctionMapper auctionMapper;
     private final StringRedisTemplate redisTemplate;
+    private final BidClient bidClient;
 
     public AuctionService(AuctionRepository auctionRepository,
                           LoadRepository loadRepository,
                           AuctionMapper auctionMapper,
-                          StringRedisTemplate redisTemplate) {
+                          StringRedisTemplate redisTemplate,
+                          BidClient bidClient) {
         this.auctionRepository = auctionRepository;
         this.loadRepository = loadRepository;
         this.auctionMapper = auctionMapper;
         this.redisTemplate = redisTemplate;
+        this.bidClient = bidClient;
     }
 
     @Transactional
@@ -79,6 +84,8 @@ public class AuctionService {
             throw new IllegalStateException("Auction is already closed");
         }
 
+        bidClient.findBestBid(id).ifPresent(bestBid -> applyWinner(auction, bestBid));
+
         auction.setStatus(AuctionStatus.CLOSED);
         auction.setClosedAt(LocalDateTime.now());
 
@@ -89,8 +96,14 @@ public class AuctionService {
                 serializeClosedAuction(saved)
         );
 
-        log.info("Auction closed: auctionId={}, closedAt={}", saved.getId(), saved.getClosedAt());
+        log.info("Auction closed: auctionId={}, closedAt={}, winnerCarrierId={}, winningAmount={}",
+                saved.getId(), saved.getClosedAt(), saved.getWinnerCarrierId(), saved.getWinningAmount());
         return auctionMapper.toResponse(saved);
+    }
+
+    private void applyWinner(Auction auction, BestBidResponse bestBid) {
+        auction.setWinnerCarrierId(bestBid.carrierId());
+        auction.setWinningAmount(bestBid.amount());
     }
 
     private Auction findAuctionOrThrow(UUID id) {
@@ -106,12 +119,16 @@ public class AuctionService {
                 {
                   "auctionId": "%s",
                   "status": "%s",
-                  "closedAt": "%s"
+                  "closedAt": "%s",
+                  "winnerCarrierId": %s,
+                  "winningAmount": %s
                 }
                 """.formatted(
                 auction.getId(),
                 auction.getStatus(),
-                auction.getClosedAt()
+                auction.getClosedAt(),
+                auction.getWinnerCarrierId() == null ? "null" : "\"" + auction.getWinnerCarrierId() + "\"",
+                auction.getWinningAmount() == null ? "null" : auction.getWinningAmount()
         );
     }
 
