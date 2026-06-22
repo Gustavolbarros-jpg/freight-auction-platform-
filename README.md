@@ -224,6 +224,8 @@ O fluxo do `bid-service` foi validado com Docker:
 
 ## Documentacao
 
+- `docs/entrega-2.md`: resumo final da Entrega 2.
+- `docs/entrega-2-plano-execucao.md`: plano de execucao usado para organizar as prioridades da Entrega 2.
 - `docs/git-workflow.md`: fluxo de branches e commits.
 - `docs/run-locally.md`: orientacoes para rodar localmente.
 - `docs/bid-service-implementation.md`: detalhes da implementacao do `bid-service`.
