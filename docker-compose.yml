@@ -140,6 +140,18 @@ services:
     networks:
       - leilao_net
 
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auction-service
+      - bid-service
+      - auth-service
+    networks:
+      - leilao_net
+
 networks:
   leilao_net:
     driver: bridge
