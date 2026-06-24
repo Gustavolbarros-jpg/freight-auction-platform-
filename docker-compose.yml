@@ -125,6 +125,32 @@ services:
     networks:
       - leilao_net
 
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - auction-service
+      - bid-service
+      - auth-service
+    networks:
+      - leilao_net
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - leilao_net
+
   notification-service:
     build:
       context: ./services/notification-service
@@ -146,3 +172,4 @@ networks:
 
 volumes:
   leilao_data:
+  grafana_data:
