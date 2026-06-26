@@ -161,6 +161,23 @@ services:
     networks:
       - leilao_net
 
+  analytics-service:
+    build:
+      context: ./services/analytics-service
+    ports:
+      - "8085:8085"
+    environment:
+      POSTGRES_URL: postgresql+psycopg2://freight_user:example@postgres:5432/freight_auction
+      MONGO_URL: mongodb://root:example@mongo:27017
+      MONGO_DATABASE: freight_auction
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_started
+    networks:
+      - leilao_net
+
   api-gateway:
     build:
       context: ./services/api-gateway
@@ -175,6 +192,34 @@ services:
     networks:
       - leilao_net
 
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - auction-service
+      - bid-service
+      - auth-service
+      - analytics-service
+    networks:
+      - leilao_net
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - leilao_net
+
 networks:
   leilao_net:
     driver: bridge
@@ -182,3 +227,4 @@ networks:
 volumes:
   leilao_data:
   mongo_data:
+  grafana_data:
