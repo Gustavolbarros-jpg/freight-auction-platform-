@@ -51,8 +51,17 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
+      MONGO_INITDB_DATABASE: audit_db
+    volumes:
+      - mongo_data:/data/db
+      - ./infra/mongodb:/docker-entrypoint-initdb.d:ro
     ports:
       - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     networks:
       - leilao_net
 
@@ -69,11 +78,14 @@ services:
       REDIS_PORT: 6379
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-change-this-development-secret-with-32-chars}
       BID_SERVICE_URL: http://bid-service:8082
+      MONGO_URL: mongodb://root:example@mongo:27017
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mongo:
+        condition: service_started
     networks:
       - leilao_net
 
@@ -94,6 +106,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: example
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-change-this-development-secret-with-32-chars}
       AUCTION_SERVICE_URL: http://auction-service:8081
+      MONGO_URL: mongodb://root:example@mongo:27017
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -101,6 +114,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      mongo:
+        condition: service_started
       auction-service:
         condition: service_started
       auth-service:
@@ -146,3 +161,4 @@ networks:
 
 volumes:
   leilao_data:
+  mongo_data:
