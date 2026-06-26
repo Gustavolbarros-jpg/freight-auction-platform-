@@ -21,7 +21,7 @@ import java.util.UUID;
 
 @Slf4j
 @RestController
-@RequestMapping("v1/bids")
+@RequestMapping("/v1/bids")
 public class BidController {
 
     private final BidService bidService;

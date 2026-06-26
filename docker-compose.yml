@@ -161,6 +161,20 @@ services:
     networks:
       - leilao_net
 
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-change-this-development-secret-with-32-chars}
+    depends_on:
+      - auction-service
+      - bid-service
+      - auth-service
+    networks:
+      - leilao_net
+
 networks:
   leilao_net:
     driver: bridge

@@ -1,0 +1,33 @@
+server:
+  port: 8080
+
+spring:
+  cloud:
+    gateway:
+      server:
+        webmvc:
+          routes:
+
+            - id: auth-route
+              uri: http://auth-service:8084
+              predicates:
+                - Path=/v1/auth/**
+
+            - id: auction-loads-route
+              uri: http://auction-service:8081
+              predicates:
+                - Path=/v1/loads/**
+
+            - id: auction-auctions-route
+              uri: http://auction-service:8081
+              predicates:
+                - Path=/v1/auctions/**
+
+            - id: bid-service
+              uri: http://bid-service:8082
+              predicates:
+                - Path=/v1/bids/**
+
+auth:
+  jwt:
+    secret: ${AUTH_JWT_SECRET:change-this-development-secret-with-32-chars}
