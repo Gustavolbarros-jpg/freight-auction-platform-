@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -10,3 +12,4 @@ class AuctionSummaryResponse(BaseModel):
     total: int
     by_status: list[AuctionStatusCount]
     closed_with_winner: int
+    recent_events: list[dict[str, Any]]

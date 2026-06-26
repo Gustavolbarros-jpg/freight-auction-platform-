@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -16,3 +17,4 @@ class CarrierRankingItem(BaseModel):
 
 class CarriersSummaryResponse(BaseModel):
     ranking: list[CarrierRankingItem]
+    recent_events: list[dict[str, Any]]
