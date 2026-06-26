@@ -1,4 +1,4 @@
-CREATE TABLE loads (
+CREATE TABLE IF NOT EXISTS loads (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     origin VARCHAR(160) NOT NULL,
     destination VARCHAR(160) NOT NULL,

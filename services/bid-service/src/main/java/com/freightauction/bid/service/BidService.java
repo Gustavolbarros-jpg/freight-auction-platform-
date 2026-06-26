@@ -1,5 +1,6 @@
 package com.freightauction.bid.service;
 
+import com.freightauction.bid.audit.AuditService;
 import com.freightauction.bid.auction.AuctionCacheService;
 import com.freightauction.bid.domain.Bid;
 import com.freightauction.bid.domain.BidStatus;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,13 +30,16 @@ public class BidService {
     private final BidEventPublisher bidEventPublisher;
     private final AuctionCacheService auctionCacheService;
     private final BidRepository bidRepository;
+    private final AuditService auditService;
 
     public BidService(BidEventPublisher bidEventPublisher,
                       AuctionCacheService auctionCacheService,
-                      BidRepository bidRepository) {
+                      BidRepository bidRepository,
+                      AuditService auditService) {
         this.bidEventPublisher = bidEventPublisher;
         this.auctionCacheService = auctionCacheService;
         this.bidRepository = bidRepository;
+        this.auditService = auditService;
     }
 
     public BidAcceptedResponse placeBid(CreateBidRequest request, UUID carrierId) {
@@ -73,6 +78,15 @@ public class BidService {
 
         BidPlacedEvent event = new BidPlacedEvent(bidId, request.auctionId(), carrierId, request.amount(), receivedAt);
         bidEventPublisher.publish(event);
+        auditService.save(
+                "BID_RECEIVED",
+                request.auctionId(),
+                Map.of(
+                        "bidId", bidId.toString(),
+                        "carrierId", carrierId.toString(),
+                        "amount", request.amount()
+                )
+        );
 
         log.info("Bid queued: bidId={}, auctionId={}, carrierId={}, amount={}",
                 bidId, request.auctionId(), carrierId, request.amount());
@@ -85,6 +99,16 @@ public class BidService {
         Bid bid = bidRepository.findById(bidId)
                 .orElseThrow(() -> new IllegalStateException("Persisted bid not found: " + bidId));
         bid.setStatus(acceptedAsBest ? BidStatus.VALIDATED : BidStatus.REJECTED);
+        auditService.save(
+                acceptedAsBest ? "BID_VALIDATED" : "BID_REJECTED",
+                bid.getAuctionId(),
+                Map.of(
+                        "bidId", bid.getId().toString(),
+                        "carrierId", bid.getCarrierId().toString(),
+                        "amount", bid.getAmount(),
+                        "status", bid.getStatus().name()
+                )
+        );
         log.info("Bid status updated: bidId={}, status={}", bidId, bid.getStatus());
     }
 }

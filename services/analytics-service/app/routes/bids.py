@@ -1,15 +1,19 @@
 from fastapi import APIRouter
+import pandas as pd
+from app.schemas.bids import BidSummaryResponse
 
 from app.database import fetch_all
 
 router = APIRouter()
 
 
-@router.get("/bids")
+@router.get("/bids", response_model=BidSummaryResponse)
 def get_bids_summary():
+    by_status_df = pd.DataFrame(fetch_bids_by_status())
+
     return {
         "total": fetch_total_bids(),
-        "by_status": fetch_bids_by_status(),
+        "by_status": by_status_df.to_dict(orient="records"),
         "amounts": fetch_bid_amounts_summary()
     }
 

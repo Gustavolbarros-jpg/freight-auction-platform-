@@ -10,11 +10,11 @@ POSTGRES_URL = os.getenv(
     "postgresql+psycopg2://freight_user:example@localhost:5433/freight_auction"
 )
 
-MONGO_DATABASE = os.getenv("MONGO_DATABASE", "freight_auction")
+MONGO_DATABASE = os.getenv("MONGO_DATABASE", "audit_db")
 
 MONGO_URL = os.getenv(
     "MONGO_URL",
-    "mongodb://root:example@localhost:27017"
+    "mongodb://root:example@localhost:27017/?authSource=admin"
 )
 
 
