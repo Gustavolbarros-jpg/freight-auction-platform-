@@ -6,12 +6,12 @@
  * @returns {string} JSON serializado
  */
 function buildPayload(type, auctionId, data) {
-  return JSON.stringify({
-    type,
-    auctionId,
-    data,
-    sentAt: new Date().toISOString()
-  });
+    return JSON.stringify({
+        type,
+        auctionId,
+        data,
+        sentAt: new Date().toISOString()
+    });
 }
 
-module.exports = { buildPayload };
+module.exports = {buildPayload};

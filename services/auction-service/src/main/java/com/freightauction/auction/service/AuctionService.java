@@ -5,9 +5,12 @@ import com.freightauction.auction.domain.Auction;
 import com.freightauction.auction.domain.AuctionStatus;
 import com.freightauction.auction.domain.Load;
 import com.freightauction.auction.dto.AuctionResponse;
-import com.freightauction.auction.dto.CreateAuctionRequest;
 import com.freightauction.auction.dto.BestBidResponse;
+import com.freightauction.auction.dto.CreateAuctionRequest;
+import com.freightauction.auction.event.AuctionClosedEvent;
+import com.freightauction.auction.event.AuctionOpenedEvent;
 import com.freightauction.auction.mapper.AuctionMapper;
+import com.freightauction.auction.messaging.AuctionEventPublisher;
 import com.freightauction.auction.repository.AuctionRepository;
 import com.freightauction.auction.repository.LoadRepository;
 import jakarta.transaction.Transactional;
@@ -22,22 +25,26 @@ import java.util.UUID;
 @Slf4j
 @Service
 public class AuctionService {
+
     private final AuctionRepository auctionRepository;
-    private final LoadRepository loadRepository;       // para buscar a Load pelo id
+    private final LoadRepository loadRepository;
     private final AuctionMapper auctionMapper;
     private final StringRedisTemplate redisTemplate;
     private final BidClient bidClient;
+    private final AuctionEventPublisher auctionEventPublisher;
 
     public AuctionService(AuctionRepository auctionRepository,
                           LoadRepository loadRepository,
                           AuctionMapper auctionMapper,
                           StringRedisTemplate redisTemplate,
-                          BidClient bidClient) {
+                          BidClient bidClient,
+                          AuctionEventPublisher auctionEventPublisher) {
         this.auctionRepository = auctionRepository;
         this.loadRepository = loadRepository;
         this.auctionMapper = auctionMapper;
         this.redisTemplate = redisTemplate;
         this.bidClient = bidClient;
+        this.auctionEventPublisher = auctionEventPublisher;
     }
 
     @Transactional
@@ -55,6 +62,13 @@ public class AuctionService {
         }
 
         Auction saved = auctionRepository.save(auctionMapper.toEntity(request, load, createdByUserId));
+
+        auctionEventPublisher.publishAuctionOpened(new AuctionOpenedEvent(
+                saved.getId(),
+                "OPEN",
+                saved.getLoad().getInitialPrice()
+        ));
+
         log.info("Auction created: auctionId={}, loadId={}, createdByUserId={}",
                 saved.getId(), load.getId(), createdByUserId);
         return auctionMapper.toResponse(saved);
@@ -91,10 +105,12 @@ public class AuctionService {
 
         Auction saved = auctionRepository.save(auction);
 
-        redisTemplate.convertAndSend(
-                "auction.closed",
-                serializeClosedAuction(saved)
-        );
+        redisTemplate.convertAndSend("auction.closed", serializeClosedAuction(saved));
+
+        auctionEventPublisher.publishAuctionClosed(new AuctionClosedEvent(
+                saved.getId(),
+                "CLOSED"
+        ));
 
         log.info("Auction closed: auctionId={}, closedAt={}, winnerCarrierId={}, winningAmount={}",
                 saved.getId(), saved.getClosedAt(), saved.getWinnerCarrierId(), saved.getWinningAmount());
@@ -131,5 +147,4 @@ public class AuctionService {
                 auction.getWinningAmount() == null ? "null" : auction.getWinningAmount()
         );
     }
-
 }
