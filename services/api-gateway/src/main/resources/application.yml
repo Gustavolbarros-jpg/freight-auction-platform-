@@ -28,6 +28,11 @@ spring:
               predicates:
                 - Path=/v1/bids/**
 
+            - id: auction-swagger-route
+              uri: http://auction-service:8081
+              predicates:
+                - Path=/swagger-ui/**,/v3/api-docs/**,/api-docs/**
+
 auth:
   jwt:
     secret: ${AUTH_JWT_SECRET:change-this-development-secret-with-32-chars}
