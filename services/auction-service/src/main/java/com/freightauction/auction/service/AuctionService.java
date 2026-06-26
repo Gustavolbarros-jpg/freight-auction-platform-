@@ -1,5 +1,6 @@
 package com.freightauction.auction.service;
 
+import com.freightauction.auction.audit.AuditService;
 import com.freightauction.auction.client.BidClient;
 import com.freightauction.auction.domain.Auction;
 import com.freightauction.auction.domain.AuctionStatus;
@@ -19,7 +20,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -32,19 +35,23 @@ public class AuctionService {
     private final StringRedisTemplate redisTemplate;
     private final BidClient bidClient;
     private final AuctionEventPublisher auctionEventPublisher;
+    private final AuditService auditService;
+
 
     public AuctionService(AuctionRepository auctionRepository,
                           LoadRepository loadRepository,
                           AuctionMapper auctionMapper,
                           StringRedisTemplate redisTemplate,
                           BidClient bidClient,
-                          AuctionEventPublisher auctionEventPublisher) {
+                          AuctionEventPublisher auctionEventPublisher,
+                          AuditService auditService) {
         this.auctionRepository = auctionRepository;
         this.loadRepository = loadRepository;
         this.auctionMapper = auctionMapper;
         this.redisTemplate = redisTemplate;
         this.bidClient = bidClient;
         this.auctionEventPublisher = auctionEventPublisher;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -68,6 +75,15 @@ public class AuctionService {
                 "OPEN",
                 saved.getLoad().getInitialPrice()
         ));
+        auditService.save(
+                "AUCTION_OPENED",
+                saved.getId(),
+                Map.of(
+                        "loadId", saved.getLoad().getId().toString(),
+                        "createdByUserId", saved.getCreatedByUserId().toString(),
+                        "initialPrice", saved.getLoad().getInitialPrice()
+                )
+        );
 
         log.info("Auction created: auctionId={}, loadId={}, createdByUserId={}",
                 saved.getId(), load.getId(), createdByUserId);
@@ -111,6 +127,12 @@ public class AuctionService {
                 saved.getId(),
                 "CLOSED"
         ));
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("winnerCarrierId", saved.getWinnerCarrierId() == null ? null : saved.getWinnerCarrierId().toString());
+        payload.put("winningAmount", saved.getWinningAmount());
+        payload.put("closedAt", saved.getClosedAt().toString());
+        auditService.save("AUCTION_CLOSED", saved.getId(), payload);
 
         log.info("Auction closed: auctionId={}, closedAt={}, winnerCarrierId={}, winningAmount={}",
                 saved.getId(), saved.getClosedAt(), saved.getWinnerCarrierId(), saved.getWinningAmount());
