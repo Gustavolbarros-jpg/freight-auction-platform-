@@ -23,10 +23,14 @@ Servicos implementados ate agora:
 - `auction-service`: servico Java/Spring Boot responsavel por cargas e leiloes.
 - `bid-service`: servico Java/Spring Boot responsavel pelo fluxo de lances.
 - `auth-service`: servico Java/Spring Boot responsavel por cadastro, login e tokens JWT.
+- `analytics-service`: servico Python/FastAPI responsavel por consultas analiticas do negocio.
 - `notification-service`: servico Node.js preparado para notificacoes via WebSocket e Redis Pub/Sub.
 - `postgres`: banco relacional usado pelos servicos que precisam persistir dados.
+- `mongo`: banco documental usado para eventos de auditoria.
 - `rabbitmq`: broker de mensagens usado para processar lances em fila.
 - `redis`: cache usado para guardar o melhor lance atual por leilao.
+- `prometheus`: coleta metricas dos servicos.
+- `grafana`: visualizacao das metricas coletadas.
 
 Tambem existem arquivos de infraestrutura e documentacao em:
 
@@ -41,10 +45,13 @@ A arquitetura foi pensada como uma plataforma distribuida baseada em microsservi
 Tecnologias escolhidas:
 
 - Java 21 com Spring Boot para `auction-service` e `bid-service`: escolha feita por oferecer suporte maduro para APIs REST, validacao de entrada, configuracao por ambiente, integracao com banco relacional, RabbitMQ e Redis.
+- Python com FastAPI para `analytics-service`: escolha feita para facilitar agregacoes analiticas, consultas de relatorio e exposicao rapida de endpoints HTTP.
 - Node.js para `notification-service`: escolha feita por se encaixar bem no modelo de conexoes WebSocket e notificacoes em tempo real.
 - PostgreSQL para dados persistentes: usado para entidades que precisam sobreviver ao ciclo de vida dos servicos, como cargas, leiloes e futuramente historico de lances.
+- MongoDB para auditoria: usado para armazenar eventos de negocio em formato documental, como leilao aberto, leilao fechado, lance recebido, lance validado e lance rejeitado.
 - RabbitMQ para fila de lances: usado para desacoplar o recebimento HTTP do processamento dos lances e preservar a ordem de chegada no consumidor.
 - Redis para estado rapido em memoria: usado para consultar rapidamente o melhor lance atual de cada leilao.
+- Prometheus e Grafana para observabilidade: usados para coletar e visualizar metricas tecnicas dos servicos.
 - Docker Compose para ambiente local: usado para subir os servicos e dependencias de forma padronizada.
 
 Essas escolhas se encaixam na arquitetura de alto nivel porque separam responsabilidades, permitem evoluir cada servico de forma independente e usam fila/cache para lidar com concorrencia e estado compartilhado.
@@ -59,6 +66,9 @@ Essas escolhas se encaixam na arquitetura de alto nivel porque separam responsab
 │   └── postgres
 │       └── migrations
 └── services
+    ├── analytics-service
+    ├── api-gateway
+    ├── auth-service
     ├── auction-service
     ├── bid-service
     └── notification-service
@@ -248,6 +258,55 @@ ws://localhost:8083/?auction=<auction-id>
 
 Quando um melhor lance e validado, chega uma mensagem `bid.validated`. Quando o leilao fecha, chega uma mensagem `auction.closed`.
 
+### Analytics
+
+O `analytics-service` expoe consultas agregadas em FastAPI:
+
+```text
+GET http://localhost:8085/health
+GET http://localhost:8085/docs
+GET http://localhost:8085/v1/analytics/auctions
+GET http://localhost:8085/v1/analytics/bids
+GET http://localhost:8085/v1/analytics/carriers
+GET http://localhost:8085/metrics
+```
+
+Esses endpoints consultam o Postgres para gerar resumos de leiloes, lances e transportadoras. O endpoint `/metrics` expoe metricas no formato Prometheus.
+
+### Auditoria
+
+Eventos importantes de negocio sao gravados no MongoDB, na collection `events` do banco `audit_db`.
+
+Eventos registrados atualmente:
+
+- `AUCTION_OPENED`
+- `AUCTION_CLOSED`
+- `BID_RECEIVED`
+- `BID_VALIDATED`
+- `BID_REJECTED`
+
+Cada evento guarda o tipo, o servico de origem, o `auctionId`, um `payload` com detalhes da operacao e o `timestamp`.
+
+### Observabilidade
+
+Endpoints de metricas:
+
+```text
+auction-service: http://localhost:8081/actuator/prometheus
+bid-service: http://localhost:8082/actuator/prometheus
+auth-service: http://localhost:8084/actuator/prometheus
+analytics-service: http://localhost:8085/metrics
+```
+
+Ferramentas:
+
+```text
+Prometheus: http://localhost:9090
+Grafana: http://localhost:3000
+usuario: admin
+senha: admin
+```
+
 ## Como Rodar
 
 Para subir a infraestrutura e os servicos principais:
@@ -276,7 +335,12 @@ Portas principais:
 - `bid-service`: `8082`
 - `notification-service`: `8083`
 - `auth-service`: `8084`
-- `postgres`: `5432`
+- `analytics-service`: `8085`
+- `api-gateway`: `8080`
+- `postgres`: `5433` no host, `5432` dentro do Docker
+- `mongo`: `27017`
+- `prometheus`: `9090`
+- `grafana`: `3000`
 - `rabbitmq`: `5672`
 - `rabbitmq-management`: `15672`
 - `redis`: `6379`
@@ -286,9 +350,12 @@ Portas principais:
 O fluxo do `bid-service` foi validado com Docker:
 
 - Redis e RabbitMQ subiram saudaveis.
+- MongoDB subiu saudavel e recebeu eventos de auditoria.
 - Postgres subiu saudavel e recebeu as tabelas de usuarios, cargas, leiloes e lances.
 - `auth-service` subiu na porta `8084` e gerou JWT para `ADMIN` e `TRANSPORTADORA`.
 - `bid-service` subiu na porta `8082`.
+- `analytics-service` subiu na porta `8085` e expos endpoints de resumo e metricas.
+- Prometheus e Grafana subiram para observabilidade local.
 - `POST /bids` sem token retornou erro; com token de transportadora retornou `202 Accepted`.
 - Lances para leilao fechado retornaram `409`.
 - A mensagem foi processada pelo consumer via RabbitMQ.
@@ -298,6 +365,7 @@ O fluxo do `bid-service` foi validado com Docker:
 - Em caso de empate, o primeiro lance processado foi mantido.
 - `PATCH /v1/auctions/{id}/close` gravou vencedor e valor vencedor no leilao.
 - Eventos `bid.validated` e `auction.closed` chegaram ao `notification-service` via Redis Pub/Sub/WebSocket.
+- Eventos de auditoria foram gravados no MongoDB para lances e leiloes.
 
 ## Documentacao
 
@@ -316,4 +384,4 @@ Itens que podem entrar nas proximas entregas:
 - evoluir autorizacao com refresh token e revogacao;
 - adicionar Testcontainers para validar Postgres/RabbitMQ/Redis em pipeline;
 - criar frontend e paineis de acompanhamento dos leiloes;
-- adicionar metricas, tracing e observabilidade distribuida.
+- evoluir dashboards do Grafana com metricas de negocio e alertas.

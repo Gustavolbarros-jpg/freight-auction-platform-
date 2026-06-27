@@ -3,8 +3,8 @@ package com.freightauction.bid.service;
 import com.freightauction.bid.dto.BestBidResponse;
 import com.freightauction.bid.event.BidPlacedEvent;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
