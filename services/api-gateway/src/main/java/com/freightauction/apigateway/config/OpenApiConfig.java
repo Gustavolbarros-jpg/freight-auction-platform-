@@ -22,19 +22,12 @@ public class OpenApiConfig {
                     Este gateway roteia requisições para os serviços especializados:
                     
                     **📌 Serviços disponíveis:**
-                    - Auth Service: Autenticação e gerenciamento de usuários
-                    - Auction Service: Leilões e cargas de frete
-                    - Bid Service: Sistema de lances
-                    - Notification Service: Notificações em tempo real (WebSocket)
+                    - Auth Service: Autenticação e gerenciamento de usuários (porta 8084)
+                    - Auction Service: Leilões e cargas de frete (porta 8081)
+                    - Bid Service: Sistema de lances (porta 8082)
                     
                     **🔐 Autenticação:**
-                    Todos os endpoints requerem Bearer Token JWT
-                    
-                    **📍 URLs dos serviços:**
-                    - Auth: http://localhost:8081
-                    - Auctions: http://localhost:8082
-                    - Bids: http://localhost:8083
-                    - Notifications: http://localhost:3000
+                    Todos os endpoints (exceto /v1/auth/*) requerem Bearer Token JWT
                     """)
                         .contact(new Contact()
                                 .name("API Support")

@@ -21,10 +21,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String[] PUBLIC_PATHS = {
             "/v1/auth/",
             "/swagger-ui",
-            "/api-docs",
+            "/swagger-ui.html",
+            "/api-docs",          // cobre /api-docs, /api-docs/auth, /api-docs/auction, /api-docs/bid
             "/v3/api-docs",
             "/swagger-resources",
-            "/webjars/"
+            "/webjars/",
     };
 
     @Override
@@ -49,7 +50,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             JwtTokenVerifier.AuthenticatedUser user = tokenVerifier.verify(token);
 
             MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
-
             mutableRequest.addHeader("X-User-Id",   user.userId().toString());
             mutableRequest.addHeader("X-User-Role", user.role());
 
