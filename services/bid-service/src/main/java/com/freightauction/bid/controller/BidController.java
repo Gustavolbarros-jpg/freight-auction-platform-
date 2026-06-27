@@ -2,6 +2,7 @@ package com.freightauction.bid.controller;
 
 import com.freightauction.bid.dto.BestBidResponse;
 import com.freightauction.bid.dto.BidAcceptedResponse;
+import com.freightauction.bid.dto.BidResponse;
 import com.freightauction.bid.dto.CreateBidRequest;
 import com.freightauction.bid.service.BestBidService;
 import com.freightauction.bid.service.BidService;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -57,5 +59,14 @@ public class BidController {
     public BestBidResponse findBestBid(@PathVariable UUID auctionId) {
         log.info("Request received: GET /bids/auctions/{auctionId}/best, auctionId={}", auctionId);
         return bestBidService.findBestBid(auctionId);
+    }
+
+    @GetMapping("/auctions/{auctionId}")
+    @Operation(summary = "List bids by auction")
+    @ApiResponse(responseCode = "200", description = "Success")
+    @ApiResponse(responseCode = "400", description = "Error")
+    public List<BidResponse> findByAuctionId(@PathVariable UUID auctionId) {
+        log.info("Request received: GET /bids/auctions/{auctionId}, auctionId={}", auctionId);
+        return bidService.findByAuctionId(auctionId);
     }
 }

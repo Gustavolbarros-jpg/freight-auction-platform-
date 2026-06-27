@@ -5,6 +5,7 @@ import com.freightauction.bid.auction.AuctionCacheService;
 import com.freightauction.bid.domain.Bid;
 import com.freightauction.bid.domain.BidStatus;
 import com.freightauction.bid.dto.BidAcceptedResponse;
+import com.freightauction.bid.dto.BidResponse;
 import com.freightauction.bid.dto.CreateBidRequest;
 import com.freightauction.bid.event.BidPlacedEvent;
 import com.freightauction.bid.exception.AuctionValidationException;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -92,6 +94,20 @@ public class BidService {
                 bidId, request.auctionId(), carrierId, request.amount());
 
         return new BidAcceptedResponse(bidId, ACCEPTED_STATUS, receivedAt);
+    }
+
+    public List<BidResponse> findByAuctionId(UUID auctionId) {
+        return bidRepository.findByAuctionIdOrderByReceivedAtDesc(auctionId)
+                .stream()
+                .map(bid -> new BidResponse(
+                        bid.getId(),
+                        bid.getAuctionId(),
+                        bid.getCarrierId(),
+                        bid.getAmount(),
+                        bid.getStatus(),
+                        bid.getReceivedAt()
+                ))
+                .toList();
     }
 
     @Transactional

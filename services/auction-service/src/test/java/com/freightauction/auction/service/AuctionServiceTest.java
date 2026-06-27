@@ -108,6 +108,7 @@ class AuctionServiceTest {
                 auction.getStatus(),
                 null,
                 auction.getStartedAt(),
+                auction.getDurationMinutes(),
                 auction.getClosedAt(),
                 auction.getCreatedByUserId(),
                 auction.getWinnerCarrierId(),

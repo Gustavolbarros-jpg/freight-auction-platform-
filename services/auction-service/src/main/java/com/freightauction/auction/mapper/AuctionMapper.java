@@ -19,6 +19,7 @@ public interface AuctionMapper {
     @Mapping(target = "load", source = "load")
     @Mapping(target = "status", expression = "java(AuctionStatus.OPEN)")
     @Mapping(target = "startedAt", expression = "java(LocalDateTime.now())")
+    @Mapping(target = "durationMinutes", source = "request.durationMinutes")
     @Mapping(target = "closedAt", ignore = true)
     @Mapping(target = "createdByUserId", source = "createdByUserId")
     @Mapping(target = "winnerCarrierId", ignore = true)

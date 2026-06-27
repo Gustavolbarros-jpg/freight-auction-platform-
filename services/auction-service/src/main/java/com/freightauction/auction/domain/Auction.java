@@ -30,6 +30,9 @@ public class Auction {
     @Column(name = "started_at", nullable = false)
     private LocalDateTime startedAt;
 
+    @Column(name = "duration_minutes", nullable = false)
+    private Integer durationMinutes;
+
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
 
