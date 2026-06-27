@@ -3,13 +3,16 @@ package com.freightauction.bid.service;
 import com.freightauction.bid.dto.BestBidResponse;
 import com.freightauction.bid.event.BidPlacedEvent;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.UUID;
 
 @Slf4j
@@ -19,32 +22,48 @@ public class BestBidService {
     private static final String FIELD_SEPARATOR = "|";
 
     private final StringRedisTemplate redisTemplate;
+    private final DefaultRedisScript<Long> compareAndSetBestBidScript;
 
     public BestBidService(StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
+        this.compareAndSetBestBidScript = buildScript();
+    }
+
+    // Carregado uma vez na construção. O Spring/Lettuce manda o SHA1 pro Redis
+    // (EVALSHA) nas chamadas seguintes, evitando reenviar o texto do script sempre.
+    private static DefaultRedisScript<Long> buildScript() {
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("scripts/compare_and_set_best_bid.lua"));
+        script.setResultType(Long.class);
+        return script;
     }
 
     public boolean process(BidPlacedEvent event) {
         log.info("Processing bid: bidId={}, auctionId={}, carrierId={}, amount={}", event.bidId(), event.auctionId(), event.carrierId(), event.amount());
         String key = "auction:%s:best_bid".formatted(event.auctionId());
-        String currentBestBid = redisTemplate.opsForValue().get(key);
 
-        if (currentBestBid == null
-                || event.amount().compareTo(extractAmount(currentBestBid)) < 0) {
+        // GET + compare + SET roda atômico dentro do Redis: elimina a race condition
+        // de dois bids concorrentes lerem o mesmo "melhor lance atual" e ambos vencerem.
+        Long becameBest = redisTemplate.execute(
+                compareAndSetBestBidScript,
+                Collections.singletonList(key),
+                event.amount().toPlainString(),
+                serialize(event)
+        );
 
-            redisTemplate.opsForValue().set(key, serialize(event));
+        boolean acceptedAsBest = becameBest != null && becameBest == 1L;
 
+        if (acceptedAsBest) {
             redisTemplate.convertAndSend(
                     "bid.validated",
                     serializeNotification(event)
             );
-
             log.info("Best bid updated: bidId={}, auctionId={}, carrierId={}, amount={}", event.bidId(), event.auctionId(), event.carrierId(), event.amount());
-            return true;
         } else {
             log.info("Bid processed without replacing best bid: bidId={}, auctionId={}, amount={}", event.bidId(), event.auctionId(), event.amount());
-            return false;
         }
+
+        return acceptedAsBest;
     }
 
     public BestBidResponse findBestBid(UUID auctionId) {
@@ -68,10 +87,6 @@ public class BestBidService {
         );
         log.info("Best bid found: bidId={}, auctionId={}, carrierId={}, amount={}", response.bidId(), response.auctionId(), response.carrierId(), response.amount());
         return response;
-    }
-
-    private BigDecimal extractAmount(String storedBid) {
-        return new BigDecimal(storedBid.split("\\|")[0]);
     }
 
     private String serialize(BidPlacedEvent event) {

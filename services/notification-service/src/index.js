@@ -8,12 +8,12 @@ const wss = createWebSocketServer(PORT);
 
 const subscriber = createRedisSubscriber();
 
-subscriber.subscribe('bid.validated', 'auction.closed', (err) => {
+subscriber.subscribe('bid.validated', 'auction.closed', 'auction.opened', (err) => {
     if (err) {
         console.error('Erro ao assinar canais Redis:', err);
         process.exit(1);
     }
-    console.log('Inscrito nos canais: bid.validated, auction.closed');
+    console.log('Inscrito nos canais: bid.validated, auction.closed, auction.opened');
 });
 
 subscriber.on('message', (channel, message) => {
