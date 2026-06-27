@@ -25,4 +25,12 @@ function broadcast(wss, auctionId, payload) {
   });
 }
 
-module.exports = { createWebSocketServer, broadcast };
+function broadcastAll(wss, payload) {
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(payload);
+    }
+  });
+}
+
+module.exports = { createWebSocketServer, broadcast, broadcastAll };
