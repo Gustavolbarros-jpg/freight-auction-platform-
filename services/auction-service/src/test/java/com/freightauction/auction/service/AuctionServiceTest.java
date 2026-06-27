@@ -71,7 +71,7 @@ class AuctionServiceTest {
         BestBidResponse bestBid = new BestBidResponse(
                 UUID.randomUUID(), auctionId, carrierId, new BigDecimal("777.77"), Instant.now()
         );
-        when(auctionRepository.findById(auctionId)).thenReturn(Optional.of(auction));
+        when(auctionRepository.findByIdForUpdate(auctionId)).thenReturn(Optional.of(auction));
         when(bidClient.findBestBid(auctionId)).thenReturn(Optional.of(bestBid));
         when(auctionRepository.save(auction)).thenReturn(auction);
         when(auctionMapper.toResponse(auction)).thenAnswer(invocation -> response(auction));
@@ -90,7 +90,7 @@ class AuctionServiceTest {
     void alreadyClosedAuctionIsRejected() {
         UUID auctionId = UUID.randomUUID();
         Auction auction = Auction.builder().id(auctionId).status(AuctionStatus.CLOSED).build();
-        when(auctionRepository.findById(auctionId)).thenReturn(Optional.of(auction));
+        when(auctionRepository.findByIdForUpdate(auctionId)).thenReturn(Optional.of(auction));
 
         assertThrows(IllegalStateException.class, () -> auctionService.close(auctionId));
 
