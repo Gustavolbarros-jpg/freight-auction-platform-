@@ -15,9 +15,19 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitMqConfig {
 
+    // --- bid exchange (existente) ---
     public static final String BID_EXCHANGE = "bid.exchange";
     public static final String BID_PLACED_QUEUE = "bid.placed.queue";
     public static final String BID_PLACED_ROUTING_KEY = "bid.placed";
+
+    // --- auction exchange (novo — consumido por este serviço) ---
+    public static final String AUCTION_EXCHANGE = "auction.exchange";
+    public static final String AUCTION_OPENED_QUEUE = "auction.opened.queue";
+    public static final String AUCTION_CLOSED_QUEUE = "auction.closed.queue";
+    public static final String AUCTION_OPENED_ROUTING_KEY = "auction.opened";
+    public static final String AUCTION_CLOSED_ROUTING_KEY = "auction.closed";
+
+    // ====== bid exchange beans (inalterados) ======
 
     @Bean
     public TopicExchange bidExchange() {
@@ -36,6 +46,41 @@ public class RabbitMqConfig {
                 .to(bidExchange)
                 .with(BID_PLACED_ROUTING_KEY);
     }
+
+    // ====== auction exchange beans (novos) ======
+
+    @Bean
+    public TopicExchange auctionExchange() {
+        return new TopicExchange(AUCTION_EXCHANGE);
+    }
+
+    @Bean
+    public Queue auctionOpenedQueue() {
+        return new Queue(AUCTION_OPENED_QUEUE, true); // durable — essencial!
+    }
+
+    @Bean
+    public Queue auctionClosedQueue() {
+        return new Queue(AUCTION_CLOSED_QUEUE, true); // durable — essencial!
+    }
+
+    @Bean
+    public Binding auctionOpenedBinding(Queue auctionOpenedQueue, TopicExchange auctionExchange) {
+        return BindingBuilder
+                .bind(auctionOpenedQueue)
+                .to(auctionExchange)
+                .with(AUCTION_OPENED_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding auctionClosedBinding(Queue auctionClosedQueue, TopicExchange auctionExchange) {
+        return BindingBuilder
+                .bind(auctionClosedQueue)
+                .to(auctionExchange)
+                .with(AUCTION_CLOSED_ROUTING_KEY);
+    }
+
+    // ====== shared infra ======
 
     @Bean
     public MessageConverter jsonMessageConverter() {

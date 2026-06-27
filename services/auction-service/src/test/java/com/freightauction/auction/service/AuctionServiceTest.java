@@ -1,11 +1,13 @@
 package com.freightauction.auction.service;
 
+import com.freightauction.auction.audit.AuditService;
 import com.freightauction.auction.client.BidClient;
 import com.freightauction.auction.domain.Auction;
 import com.freightauction.auction.domain.AuctionStatus;
 import com.freightauction.auction.dto.AuctionResponse;
 import com.freightauction.auction.dto.BestBidResponse;
 import com.freightauction.auction.mapper.AuctionMapper;
+import com.freightauction.auction.messaging.AuctionEventPublisher;
 import com.freightauction.auction.repository.AuctionRepository;
 import com.freightauction.auction.repository.LoadRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +43,10 @@ class AuctionServiceTest {
     private StringRedisTemplate redisTemplate;
     @Mock
     private BidClient bidClient;
+    @Mock
+    private AuctionEventPublisher auctionEventPublisher;
+    @Mock
+    private AuditService auditService;
 
     private AuctionService auctionService;
 
@@ -51,7 +57,9 @@ class AuctionServiceTest {
                 loadRepository,
                 auctionMapper,
                 redisTemplate,
-                bidClient
+                bidClient,
+                auctionEventPublisher,
+                auditService
         );
     }
 
@@ -74,6 +82,8 @@ class AuctionServiceTest {
         assertEquals(carrierId, response.winnerCarrierId());
         assertEquals(new BigDecimal("777.77"), response.winningAmount());
         verify(redisTemplate).convertAndSend(eq("auction.closed"), org.mockito.ArgumentMatchers.anyString());
+        verify(auctionEventPublisher).publishAuctionClosed(any());
+        verify(auditService).save(eq("AUCTION_CLOSED"), eq(auctionId), any());
     }
 
     @Test
@@ -87,6 +97,8 @@ class AuctionServiceTest {
         verify(bidClient, never()).findBestBid(any());
         verify(auctionRepository, never()).save(any());
         verify(redisTemplate, never()).convertAndSend(any(), any());
+        verify(auctionEventPublisher, never()).publishAuctionClosed(any());
+        verify(auditService, never()).save(any(), any(), any());
     }
 
     private AuctionResponse response(Auction auction) {
