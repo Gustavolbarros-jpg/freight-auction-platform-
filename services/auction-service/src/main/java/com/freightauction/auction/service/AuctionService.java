@@ -55,6 +55,12 @@ public class AuctionService {
         }
 
         Auction saved = auctionRepository.save(auctionMapper.toEntity(request, load, createdByUserId));
+
+        redisTemplate.convertAndSend(
+                "auction.opened",
+                serializeOpenedAuction(saved)
+        );
+
         log.info("Auction created: auctionId={}, loadId={}, createdByUserId={}",
                 saved.getId(), load.getId(), createdByUserId);
         return auctionMapper.toResponse(saved);
@@ -77,7 +83,7 @@ public class AuctionService {
     @Transactional
     public AuctionResponse close(UUID id) {
         log.info("Closing auction: auctionId={}", id);
-        Auction auction = findAuctionOrThrow(id);
+        Auction auction = findAuctionForUpdateOrThrow(id);
 
         if (auction.getStatus() == AuctionStatus.CLOSED) {
             log.warn("Auction closing rejected: auctionId={} is already closed", id);
@@ -106,12 +112,36 @@ public class AuctionService {
         auction.setWinningAmount(bestBid.amount());
     }
 
+    private Auction findAuctionForUpdateOrThrow(UUID id) {
+        return auctionRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> {
+                    log.warn("Auction not found: auctionId={}", id);
+                    return new IllegalArgumentException("Auction not found: " + id);
+                });
+    }
+
     private Auction findAuctionOrThrow(UUID id) {
         return auctionRepository.findById(id)
                 .orElseThrow(() -> {
                     log.warn("Auction not found: auctionId={}", id);
                     return new IllegalArgumentException("Auction not found: " + id);
                 });
+    }
+
+    private String serializeOpenedAuction(Auction auction) {
+        return """
+                {
+                  "auctionId": "%s",
+                  "loadId": "%s",
+                  "status": "%s",
+                  "startedAt": "%s"
+                }
+                """.formatted(
+                auction.getId(),
+                auction.getLoad().getId(),
+                auction.getStatus(),
+                auction.getStartedAt()
+        );
     }
 
     private String serializeClosedAuction(Auction auction) {
