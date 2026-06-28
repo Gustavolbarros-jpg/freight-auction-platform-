@@ -92,7 +92,7 @@ services:
       rabbitmq:
         condition: service_healthy
       mongo:
-        condition: service_started
+        condition: service_healthy
     networks:
       - leilao_net
 
@@ -123,7 +123,7 @@ services:
       postgres:
         condition: service_healthy
       mongo:
-        condition: service_started
+        condition: service_healthy
       auction-service:
         condition: service_started
       auth-service:
@@ -176,7 +176,7 @@ services:
       postgres:
         condition: service_healthy
       mongo:
-        condition: service_started
+        condition: service_healthy
     networks:
       - leilao_net
 
@@ -221,6 +221,17 @@ services:
       - prometheus
     networks:
       - leilao_net
+
+  k6:
+    image: grafana/k6
+    profiles:
+      - k6
+    volumes:
+      - ./tests/k6:/scripts
+    networks:
+      - leilao_net
+    depends_on:
+      - api-gateway
 
 networks:
   leilao_net:

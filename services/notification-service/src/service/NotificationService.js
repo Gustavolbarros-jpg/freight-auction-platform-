@@ -7,7 +7,6 @@ const SCOPED_CHANNELS = new Set(['bid.validated', 'auction.closed']);
 function handleBidEvent(wss, channel, message) {
     try {
         const event = JSON.parse(message);
-
         const payload = buildPayload(channel, event.auctionId, event);
 
         if (SCOPED_CHANNELS.has(channel)) {
@@ -23,4 +22,4 @@ function handleBidEvent(wss, channel, message) {
     }
 }
 
-module.exports = {handleBidEvent};
+module.exports = { handleBidEvent };
