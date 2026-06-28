@@ -1,33 +1,33 @@
-const { handleBidEvent } = require('../../src/service/NotificationService')
-const { broadcast } = require('../../src/controller/WebSocketController')
 const { buildPayload } = require('../../src/dto/NotificationPayload')
-
-jest.mock('../../src/controller/WebSocketController', () => ({
-  broadcast: jest.fn()
-}))
 
 describe('NotificationService', () => {
 
-  beforeEach(() => {
-    jest.clearAllMocks()
-  })
+  let handleBidEvent
+  let mockBroadcast
 
-  // -------------------------------------------------------------------------
-  // handleBidEvent
-  // -------------------------------------------------------------------------
+  beforeEach(() => {
+    jest.resetModules()
+
+    mockBroadcast = jest.fn()
+
+    jest.mock('../../src/controller/WebSocketController', () => ({
+      broadcast: mockBroadcast
+    }))
+
+    handleBidEvent = require('../../src/service/NotificationService').handleBidEvent
+  })
 
   test('deve chamar broadcast com payload correto para bid.validated', () => {
     const wss = {}
     const auctionId = '11111111-1111-1111-1111-111111111111'
     const event = { auctionId, carrierId: 'abc', amount: 750.00 }
-    const message = JSON.stringify(event)
 
-    handleBidEvent(wss, 'bid.validated', message)
+    handleBidEvent(wss, 'bid.validated', JSON.stringify(event))
 
-    expect(broadcast).toHaveBeenCalledTimes(1)
-    expect(broadcast).toHaveBeenCalledWith(wss, auctionId, expect.any(String))
+    expect(mockBroadcast).toHaveBeenCalledTimes(1)
+    expect(mockBroadcast).toHaveBeenCalledWith(wss, auctionId, expect.any(String))
 
-    const sentPayload = JSON.parse(broadcast.mock.calls[0][2])
+    const sentPayload = JSON.parse(mockBroadcast.mock.calls[0][2])
     expect(sentPayload.type).toBe('bid.validated')
     expect(sentPayload.auctionId).toBe(auctionId)
     expect(sentPayload.data).toEqual(event)
@@ -38,12 +38,11 @@ describe('NotificationService', () => {
     const wss = {}
     const auctionId = '22222222-2222-2222-2222-222222222222'
     const event = { auctionId, winnerCarrierId: 'xyz', winningAmount: 600.00 }
-    const message = JSON.stringify(event)
 
-    handleBidEvent(wss, 'auction.closed', message)
+    handleBidEvent(wss, 'auction.closed', JSON.stringify(event))
 
-    expect(broadcast).toHaveBeenCalledTimes(1)
-    const sentPayload = JSON.parse(broadcast.mock.calls[0][2])
+    expect(mockBroadcast).toHaveBeenCalledTimes(1)
+    const sentPayload = JSON.parse(mockBroadcast.mock.calls[0][2])
     expect(sentPayload.type).toBe('auction.closed')
     expect(sentPayload.auctionId).toBe(auctionId)
   })
@@ -52,20 +51,16 @@ describe('NotificationService', () => {
     const wss = {}
 
     expect(() => handleBidEvent(wss, 'bid.validated', 'invalid-json')).not.toThrow()
-    expect(broadcast).not.toHaveBeenCalled()
+    expect(mockBroadcast).not.toHaveBeenCalled()
   })
 
   test('não deve lançar exceção quando broadcast lança erro', () => {
-    broadcast.mockImplementation(() => { throw new Error('ws error') })
+    mockBroadcast.mockImplementation(() => { throw new Error('ws error') })
     const wss = {}
     const event = { auctionId: '33333333-3333-3333-3333-333333333333' }
 
     expect(() => handleBidEvent(wss, 'bid.validated', JSON.stringify(event))).not.toThrow()
   })
-
-  // -------------------------------------------------------------------------
-  // buildPayload
-  // -------------------------------------------------------------------------
 
   test('buildPayload deve serializar tipo, auctionId e data corretamente', () => {
     const data = { amount: 500 }

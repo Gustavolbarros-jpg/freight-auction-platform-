@@ -1,13 +1,12 @@
-const {broadcast} = require('../controller/WebSocketController');
-const {buildPayload} = require('../dto/NotificationPayload');
+const WebSocketController = require('../controller/WebSocketController');
+const { buildPayload } = require('../dto/NotificationPayload');
 
 function handleBidEvent(wss, channel, message) {
     try {
         const event = JSON.parse(message);
-
         const payload = buildPayload(channel, event.auctionId, event);
 
-        broadcast(wss, event.auctionId, payload);
+        WebSocketController.broadcast(wss, event.auctionId, payload);
 
         console.log(`Evento [${channel}] transmitido para leilao: ${event.auctionId}`);
     } catch (err) {
@@ -15,4 +14,4 @@ function handleBidEvent(wss, channel, message) {
     }
 }
 
-module.exports = {handleBidEvent};
+module.exports = { handleBidEvent };
