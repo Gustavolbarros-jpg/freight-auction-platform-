@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import {
   Package,
@@ -40,7 +41,8 @@ function AuctionRoom() {
 
 function AuctionContent() {
   const { id } = Route.useParams();
-  useAuctions();
+  const { refetch } = useAuctions();
+  const queryClient = useQueryClient();
   const auction = useStore((s) => s.auctions.find((a) => a.id === id));
   const user = useStore((s) => s.user);
   const wsStatus = useStore((s) => s.wsStatus);
@@ -93,7 +95,7 @@ function AuctionContent() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const v = parseFloat(bidValue.replace(",", "."));
+    const v = parseMoneyInput(bidValue);
     if (Number.isNaN(v) || v <= 0) {
       toast.error("Lance inválido");
       return;
@@ -114,6 +116,11 @@ function AuctionContent() {
 
       toast.success("Lance enviado! Aguardando confirmação via WebSocket...");
       setBidValue("");
+
+      window.setTimeout(() => {
+        void refetch();
+        void queryClient.invalidateQueries({ queryKey: ["auction-bids", auction.id] });
+      }, 1200);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Erro ao enviar lance");
     } finally {
@@ -281,7 +288,7 @@ function AuctionContent() {
                     inputMode="decimal"
                     value={bidValue}
                     onChange={(e) => setBidValue(e.target.value)}
-                    placeholder={`Menor que ${(auction.bestBid - 1).toFixed(2)}`}
+                    placeholder={`Menor que ${formatBRL(Math.max(0, auction.bestBid - 0.01))}`}
                     className="h-11 w-full rounded-md border border-border bg-background pl-9 pr-3 font-mono-tnum text-base focus:border-primary focus:outline-none"
                   />
                 </div>
@@ -412,6 +419,37 @@ function AuctionContent() {
       </div>
     </div>
   );
+}
+
+function parseMoneyInput(value: string) {
+  const cleaned = value.trim().replace(/[^\d.,]/g, "");
+
+  if (!cleaned) return Number.NaN;
+
+  const commaCount = (cleaned.match(/,/g) ?? []).length;
+  const dotCount = (cleaned.match(/\./g) ?? []).length;
+  const lastComma = cleaned.lastIndexOf(",");
+  const lastDot = cleaned.lastIndexOf(".");
+
+  if (lastComma === -1 && lastDot === -1) {
+    return Number(cleaned);
+  }
+
+  if (commaCount > 0 && dotCount > 0) {
+    const decimalSeparator = lastComma > lastDot ? "," : ".";
+    const thousandsSeparator = decimalSeparator === "," ? "." : ",";
+    return Number(cleaned.replaceAll(thousandsSeparator, "").replace(decimalSeparator, "."));
+  }
+
+  const separator = commaCount > 0 ? "," : ".";
+  const separatorCount = commaCount > 0 ? commaCount : dotCount;
+  const [integerPart, decimalPart = ""] = cleaned.split(separator);
+
+  if (separatorCount === 1 && decimalPart.length > 0 && decimalPart.length <= 2) {
+    return Number(`${integerPart}.${decimalPart}`);
+  }
+
+  return Number(cleaned.replaceAll(separator, ""));
 }
 
 function Field({ icon, label, value }: { icon?: React.ReactNode; label: string; value: string }) {

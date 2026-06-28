@@ -2,7 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 
 import { apiFetch } from "@/lib/api";
-import { useStore, type Auction, type Cargo } from "@/lib/store";
+import {
+  formatBRL,
+  useStore,
+  type Auction,
+  type AuditEvent,
+  type Bid,
+  type Cargo,
+} from "@/lib/store";
 
 interface AuctionResponse {
   id: string;
@@ -28,6 +35,15 @@ interface LoadResponse {
   createdAt: string;
 }
 
+interface BidResponse {
+  id: string;
+  auctionId: string;
+  carrierId: string;
+  amount: number | string;
+  status: "RECEIVED" | "VALIDATED" | "REJECTED" | "WINNING";
+  receivedAt: string;
+}
+
 const DEFAULT_DURATION_MINUTES = 60;
 
 function toNumber(value: number | string | null | undefined, fallback = 0) {
@@ -39,6 +55,33 @@ function toNumber(value: number | string | null | undefined, fallback = 0) {
 function shortCarrierName(carrierId: string | null) {
   if (!carrierId) return null;
   return `TRP-${carrierId.slice(0, 8)}`;
+}
+
+function isAcceptedBid(status: BidResponse["status"]) {
+  return status === "VALIDATED" || status === "WINNING";
+}
+
+function mapBidToFrontend(bid: BidResponse): Bid {
+  return {
+    id: bid.id,
+    carrier: shortCarrierName(bid.carrierId) ?? "Transportadora",
+    value: toNumber(bid.amount),
+    timestamp: bid.receivedAt,
+  };
+}
+
+function mapBidToEvent(bid: BidResponse): AuditEvent {
+  const amount = toNumber(bid.amount);
+  const carrier = shortCarrierName(bid.carrierId) ?? "Transportadora";
+  const accepted = isAcceptedBid(bid.status);
+
+  return {
+    id: bid.id,
+    type: accepted ? "BID_VALIDATED" : bid.status === "REJECTED" ? "BID_REJECTED" : "BID_RECEIVED",
+    service: "BID_SERVICE",
+    description: `${accepted ? "Lance validado" : bid.status === "REJECTED" ? "Lance rejeitado" : "Lance recebido"}: ${formatBRL(amount)} — ${carrier}`,
+    timestamp: bid.receivedAt,
+  };
 }
 
 function mapLoadToCargo(load: LoadResponse): Cargo {
@@ -56,11 +99,18 @@ function mapLoadToCargo(load: LoadResponse): Cargo {
 function mapAuctionToFrontend(
   auction: AuctionResponse,
   loadById: Map<string, LoadResponse>,
+  bidsByAuctionId: Map<string, BidResponse[]>,
 ): Auction {
   const initialValue = toNumber(auction.initialPrice);
-  const bestBid = toNumber(auction.winningAmount, initialValue);
+  const savedBids = bidsByAuctionId.get(auction.id) ?? [];
+  const acceptedBids = savedBids.filter((bid) => isAcceptedBid(bid.status));
+  const bestSavedBid = acceptedBids
+    .map((bid) => mapBidToFrontend(bid))
+    .sort((a, b) => a.value - b.value)[0];
+  const bestBid = toNumber(auction.winningAmount, bestSavedBid?.value ?? initialValue);
   const startedAt = new Date(auction.startedAt).getTime();
   const load = loadById.get(auction.loadId);
+  const leader = shortCarrierName(auction.winnerCarrierId) ?? bestSavedBid?.carrier ?? null;
 
   return {
     id: auction.id,
@@ -77,13 +127,13 @@ function mapAuctionToFrontend(
         },
     initialValue,
     bestBid,
-    leader: shortCarrierName(auction.winnerCarrierId),
+    leader,
     status: auction.status === "OPEN" ? "ABERTO" : "ENCERRADO",
-    bids: [],
+    bids: acceptedBids.map(mapBidToFrontend),
     endsAt: startedAt + toNumber(auction.durationMinutes, DEFAULT_DURATION_MINUTES) * 60 * 1000,
     createdAt: auction.startedAt,
-    winner: shortCarrierName(auction.winnerCarrierId) ?? undefined,
-    events: [],
+    winner: leader ?? undefined,
+    events: savedBids.map(mapBidToEvent),
   };
 }
 
@@ -94,8 +144,16 @@ async function fetchAuctions() {
     loadIds.map((loadId) => apiFetch<LoadResponse>(`/v1/loads/${loadId}`)),
   );
   const loadById = new Map(loads.map((load) => [load.id, load]));
+  const bidsByAuctionId = new Map(
+    await Promise.all(
+      auctions.map(async (auction) => {
+        const bids = await apiFetch<BidResponse[]>(`/v1/bids/auctions/${auction.id}`);
+        return [auction.id, bids] as const;
+      }),
+    ),
+  );
 
-  return auctions.map((auction) => mapAuctionToFrontend(auction, loadById));
+  return auctions.map((auction) => mapAuctionToFrontend(auction, loadById, bidsByAuctionId));
 }
 
 export function useAuctions() {
