@@ -78,15 +78,20 @@ public class BidService {
 
         BidPlacedEvent event = new BidPlacedEvent(bidId, request.auctionId(), carrierId, request.amount(), receivedAt);
         bidEventPublisher.publish(event);
-        auditService.save(
-                "BID_RECEIVED",
-                request.auctionId(),
-                Map.of(
-                        "bidId", bidId.toString(),
-                        "carrierId", carrierId.toString(),
-                        "amount", request.amount()
-                )
-        );
+
+        try {
+            auditService.save(
+                    "BID_RECEIVED",
+                    request.auctionId(),
+                    Map.of(
+                            "bidId", bidId.toString(),
+                            "carrierId", carrierId.toString(),
+                            "amount", request.amount()
+                    )
+            );
+        } catch (Exception e) {
+            log.warn("Falha ao salvar evento de auditoria BID_RECEIVED: {}", e.getMessage());
+        }
 
         log.info("Bid queued: bidId={}, auctionId={}, carrierId={}, amount={}",
                 bidId, request.auctionId(), carrierId, request.amount());
@@ -99,16 +104,23 @@ public class BidService {
         Bid bid = bidRepository.findById(bidId)
                 .orElseThrow(() -> new IllegalStateException("Persisted bid not found: " + bidId));
         bid.setStatus(acceptedAsBest ? BidStatus.VALIDATED : BidStatus.REJECTED);
-        auditService.save(
-                acceptedAsBest ? "BID_VALIDATED" : "BID_REJECTED",
-                bid.getAuctionId(),
-                Map.of(
-                        "bidId", bid.getId().toString(),
-                        "carrierId", bid.getCarrierId().toString(),
-                        "amount", bid.getAmount(),
-                        "status", bid.getStatus().name()
-                )
-        );
+
+        try {
+            auditService.save(
+                    acceptedAsBest ? "BID_VALIDATED" : "BID_REJECTED",
+                    bid.getAuctionId(),
+                    Map.of(
+                            "bidId", bid.getId().toString(),
+                            "carrierId", bid.getCarrierId().toString(),
+                            "amount", bid.getAmount(),
+                            "status", bid.getStatus().name()
+                    )
+            );
+        } catch (Exception e) {
+            log.warn("Falha ao salvar evento de auditoria {}: {}", 
+                    acceptedAsBest ? "BID_VALIDATED" : "BID_REJECTED", e.getMessage());
+        }
+
         log.info("Bid status updated: bidId={}, status={}", bidId, bid.getStatus());
     }
 }

@@ -4,6 +4,7 @@ import com.freightauction.auction.dto.BestBidResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 import java.util.Optional;
@@ -25,7 +26,9 @@ public class BidClient {
                     .retrieve()
                     .body(BestBidResponse.class);
             return Optional.ofNullable(response);
-        } catch (HttpClientErrorException.NotFound exception) {
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        } catch (ResourceAccessException e) {
             return Optional.empty();
         }
     }
