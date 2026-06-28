@@ -137,8 +137,7 @@ class AuctionServiceTest {
         BestBidResponse bestBid = new BestBidResponse(
                 UUID.randomUUID(), auctionId, carrierId, new BigDecimal("777.77"), Instant.now()
         );
-
-        when(auctionRepository.findById(auctionId)).thenReturn(Optional.of(auction));
+        when(auctionRepository.findByIdForUpdate(auctionId)).thenReturn(Optional.of(auction));
         when(bidClient.findBestBid(auctionId)).thenReturn(Optional.of(bestBid));
         when(auctionRepository.save(auction)).thenReturn(auction);
         when(auctionMapper.toResponse(auction)).thenAnswer(inv -> toResponse(auction));
@@ -178,8 +177,8 @@ class AuctionServiceTest {
     @DisplayName("close: deve lançar exceção quando leilão já está fechado")
     void close_shouldThrow_whenAuctionAlreadyClosed() {
         UUID auctionId = UUID.randomUUID();
-        Auction auction = buildAuction(auctionId, AuctionStatus.CLOSED, null);
-        when(auctionRepository.findById(auctionId)).thenReturn(Optional.of(auction));
+        Auction auction = Auction.builder().id(auctionId).status(AuctionStatus.CLOSED).build();
+        when(auctionRepository.findByIdForUpdate(auctionId)).thenReturn(Optional.of(auction));
 
         assertThrows(IllegalStateException.class, () -> auctionService.close(auctionId));
 

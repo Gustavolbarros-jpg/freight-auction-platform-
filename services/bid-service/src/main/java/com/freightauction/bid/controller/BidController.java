@@ -5,6 +5,9 @@ import com.freightauction.bid.dto.BidAcceptedResponse;
 import com.freightauction.bid.dto.CreateBidRequest;
 import com.freightauction.bid.service.BestBidService;
 import com.freightauction.bid.service.BidService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -22,6 +25,7 @@ import java.util.UUID;
 @Slf4j
 @RestController
 @RequestMapping("/v1/bids")
+@Tag(name = "Bids", description = "Endpoints Bids")
 public class BidController {
 
     private final BidService bidService;
@@ -34,6 +38,9 @@ public class BidController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
+    @Operation(summary = "Create Bid")
+    @ApiResponse(responseCode = "200", description = "Success")
+    @ApiResponse(responseCode = "400", description = "Error")
     public BidAcceptedResponse create(
             @Valid @RequestBody CreateBidRequest request,
             @RequestAttribute("authenticatedUserId") UUID carrierId
@@ -44,6 +51,9 @@ public class BidController {
     }
 
     @GetMapping("/auctions/{auctionId}/best")
+    @Operation(summary = "Find best bid")
+    @ApiResponse(responseCode = "200", description = "Success")
+    @ApiResponse(responseCode = "400", description = "Error")
     public BestBidResponse findBestBid(@PathVariable UUID auctionId) {
         log.info("Request received: GET /bids/auctions/{auctionId}/best, auctionId={}", auctionId);
         return bestBidService.findBestBid(auctionId);
