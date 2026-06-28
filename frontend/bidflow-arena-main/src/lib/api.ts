@@ -10,7 +10,7 @@ async function readErrorMessage(response: Response) {
 
   try {
     const data = await response.json();
-    return data.message ?? data.error ?? fallback;
+    return data.message ?? data.detail ?? data.title ?? data.error ?? data.reason ?? fallback;
   } catch {
     return fallback;
   }

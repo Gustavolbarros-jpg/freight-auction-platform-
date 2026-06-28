@@ -2,8 +2,10 @@ package com.freightauction.bid.service;
 
 import com.freightauction.bid.audit.AuditService;
 import com.freightauction.bid.auction.AuctionCacheService;
+import com.freightauction.bid.client.AuctionClient;
 import com.freightauction.bid.domain.Bid;
 import com.freightauction.bid.domain.BidStatus;
+import com.freightauction.bid.dto.AuctionSummaryResponse;
 import com.freightauction.bid.dto.BidAcceptedResponse;
 import com.freightauction.bid.dto.BidResponse;
 import com.freightauction.bid.dto.CreateBidRequest;
@@ -31,25 +33,25 @@ public class BidService {
 
     private final BidEventPublisher bidEventPublisher;
     private final AuctionCacheService auctionCacheService;
+    private final AuctionClient auctionClient;
     private final BidRepository bidRepository;
     private final AuditService auditService;
 
     public BidService(BidEventPublisher bidEventPublisher,
                       AuctionCacheService auctionCacheService,
+                      AuctionClient auctionClient,
                       BidRepository bidRepository,
                       AuditService auditService) {
         this.bidEventPublisher = bidEventPublisher;
         this.auctionCacheService = auctionCacheService;
+        this.auctionClient = auctionClient;
         this.bidRepository = bidRepository;
         this.auditService = auditService;
     }
 
     public BidAcceptedResponse placeBid(CreateBidRequest request, UUID carrierId) {
         if (auctionCacheService.isUnknown(request.auctionId())) {
-            throw new AuctionValidationException(
-                    Reason.AUCTION_NOT_SYNCED,
-                    "Auction not yet synchronized — please retry in a moment"
-            );
+            synchronizeAuctionCache(request.auctionId());
         }
 
         if (!auctionCacheService.isOpen(request.auctionId())) {
@@ -94,6 +96,26 @@ public class BidService {
                 bidId, request.auctionId(), carrierId, request.amount());
 
         return new BidAcceptedResponse(bidId, ACCEPTED_STATUS, receivedAt);
+    }
+
+    private void synchronizeAuctionCache(UUID auctionId) {
+        AuctionSummaryResponse auction = auctionClient.findById(auctionId);
+
+        if ("OPEN".equals(auction.status())) {
+            if (auction.initialPrice() == null) {
+                throw new AuctionValidationException(
+                        Reason.AUCTION_NOT_SYNCED,
+                        "Auction initial price not synchronized — please retry in a moment"
+                );
+            }
+
+            auctionCacheService.saveAsOpen(auction.id(), auction.initialPrice());
+            log.info("Auction cache hydrated from auction-service: auctionId={}, status={}", auction.id(), auction.status());
+            return;
+        }
+
+        auctionCacheService.saveAsClosed(auction.id());
+        log.info("Auction cache hydrated as closed from auction-service: auctionId={}, status={}", auction.id(), auction.status());
     }
 
     public List<BidResponse> findByAuctionId(UUID auctionId) {

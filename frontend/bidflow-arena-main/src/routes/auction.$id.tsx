@@ -122,13 +122,7 @@ function AuctionContent() {
     }
     setSubmitting(true);
     try {
-      await apiFetch<void>("/v1/bids", {
-        method: "POST",
-        body: JSON.stringify({
-          auctionId: auction.id,
-          amount: v,
-        }),
-      });
+      await submitBidWithRetry(auction.id, v);
 
       toast.success("Lance enviado! Aguardando confirmação via WebSocket...");
       setBidValue("");
@@ -484,6 +478,38 @@ function parseMoneyInput(value: string) {
     .replace(decimalSeparator, ".");
 
   return Number(normalized);
+}
+
+async function submitBidWithRetry(auctionId: string, amount: number) {
+  const maxAttempts = 4;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await apiFetch<void>("/v1/bids", {
+        method: "POST",
+        body: JSON.stringify({
+          auctionId,
+          amount,
+        }),
+      });
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      const isSyncDelay =
+        message.includes("Auction not yet synchronized") ||
+        message.includes("AUCTION_NOT_SYNCED");
+
+      if (!isSyncDelay || attempt === maxAttempts) {
+        throw error;
+      }
+
+      await wait(350 * attempt);
+    }
+  }
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function Field({ icon, label, value }: { icon?: React.ReactNode; label: string; value: string }) {
