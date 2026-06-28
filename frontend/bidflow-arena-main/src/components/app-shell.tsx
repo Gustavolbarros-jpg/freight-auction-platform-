@@ -5,7 +5,6 @@ import {
   Settings,
   LogOut,
   Truck,
-  Search,
   Bell,
   ChevronLeft,
   ChevronRight,
@@ -33,9 +32,13 @@ export function AppShell({ children, requireAdmin = false }: { children: ReactNo
   const token = useStore((s) => s.token);
   const logout = useStore((s) => s.logout);
   const wsStatus = useStore((s) => s.wsStatus);
+  const notifications = useStore((s) => s.notifications);
+  const markNotificationsRead = useStore((s) => s.markNotificationsRead);
+  const clearNotifications = useStore((s) => s.clearNotifications);
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   useGlobalTick();
   useGlobalNotifications();
@@ -72,6 +75,7 @@ export function AppShell({ children, requireAdmin = false }: { children: ReactNo
     wsStatus === "open" ? "Conectado" : wsStatus === "connecting" ? "Conectando..." : "Desconectado";
 
   const breadcrumb = pathname.split("/").filter(Boolean).join(" / ") || "home";
+  const unreadCount = notifications.filter((notification) => !notification.read).length;
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
@@ -162,19 +166,85 @@ export function AppShell({ children, requireAdmin = false }: { children: ReactNo
           </div>
           <div className="ml-auto flex items-center gap-3">
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Buscar..."
-                className="h-8 w-64 rounded-md border border-border bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-              />
+              <button
+                onClick={() => {
+                  const nextOpen = !notificationsOpen;
+                  setNotificationsOpen(nextOpen);
+                  if (nextOpen) markNotificationsRead();
+                }}
+                className="relative text-muted-foreground hover:text-foreground"
+                aria-label="Notificações"
+              >
+                <Bell className="h-4 w-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <div className="absolute right-0 top-8 z-50 w-96 overflow-hidden rounded-xl border border-border bg-[var(--surface)] shadow-2xl">
+                  <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                    <div>
+                      <div className="text-sm font-semibold">Notificações</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Últimos eventos da plataforma
+                      </div>
+                    </div>
+                    {notifications.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={clearNotifications}
+                        className="rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-background hover:text-foreground"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-96 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                        Nenhuma notificação ainda.
+                      </div>
+                    ) : (
+                      notifications.map((notification) => (
+                        <div
+                          key={notification.id}
+                          className="border-b border-border/50 px-4 py-3 last:border-0"
+                        >
+                          <div className="flex items-start gap-3">
+                            <span
+                              className={cn(
+                                "mt-1 h-2 w-2 shrink-0 rounded-full",
+                                notification.kind === "BID" ||
+                                  notification.kind === "AUCTION_OPENED"
+                                  ? "bg-primary"
+                                  : notification.kind === "CLOSING_SOON"
+                                    ? "bg-warning"
+                                    : notification.kind === "AUCTION_CLOSED"
+                                      ? "bg-success"
+                                      : "bg-muted-foreground",
+                              )}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-medium">{notification.title}</div>
+                              <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                                {notification.description}
+                              </div>
+                              <div className="mt-1 text-[10px] text-muted-foreground/70">
+                                {new Date(notification.timestamp).toLocaleString("pt-BR")}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-            <button className="relative text-muted-foreground hover:text-foreground">
-              <Bell className="h-4 w-4" />
-              <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-white">
-                3
-              </span>
-            </button>
           </div>
         </header>
         <main className="flex-1 overflow-auto p-6">{children}</main>

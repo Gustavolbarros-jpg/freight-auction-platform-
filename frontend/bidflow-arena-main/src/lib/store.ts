@@ -69,18 +69,40 @@ export interface Carrier {
   createdAt: string;
 }
 
+export type NotificationKind =
+  | "BID"
+  | "AUCTION_OPENED"
+  | "AUCTION_CLOSED"
+  | "CLOSING_SOON"
+  | "SYSTEM";
+
+export interface AppNotification {
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  description: string;
+  timestamp: string;
+  read: boolean;
+  auctionId?: string;
+}
+
 interface StoreState {
   token: string | null;
   user: User | null;
   auctions: Auction[];
   cargos: Cargo[];
   carriers: Carrier[];
+  notifications: AppNotification[];
+  closingSoonNotifiedAuctionIds: string[];
   wsStatus: "connecting" | "open" | "closed";
   login: (email: string, password: string) => Promise<User>;
   logout: () => void;
   setAuctions: (auctions: Auction[]) => void;
   setCargos: (cargos: Cargo[]) => void;
   setCarriers: (carriers: Carrier[]) => void;
+  addNotification: (notification: NewNotification) => void;
+  markNotificationsRead: () => void;
+  clearNotifications: () => void;
   updateProfile: (patch: { name?: string; email?: string }) => void;
   addBidToAuction: (auctionId: string, bid: Bid) => void;
   closeAuction: (auctionId: string) => void;
@@ -107,9 +129,48 @@ interface AuthResponse {
   role: Role;
 }
 
+type NewNotification = Omit<AppNotification, "id" | "timestamp" | "read"> &
+  Partial<Pick<AppNotification, "id" | "timestamp" | "read">>;
+
 interface StoredSession {
   token: string;
   user: User;
+}
+
+const MAX_NOTIFICATIONS = 30;
+const CLOSING_SOON_MS = 5 * 60 * 1000;
+
+function notificationId() {
+  return globalThis.crypto?.randomUUID?.() ?? `notif-${Date.now()}-${Math.random()}`;
+}
+
+function makeNotification(notification: NewNotification): AppNotification {
+  return {
+    ...notification,
+    id: notification.id ?? notificationId(),
+    timestamp: notification.timestamp ?? new Date().toISOString(),
+    read: notification.read ?? false,
+  };
+}
+
+function prependNotification(
+  notifications: AppNotification[],
+  notification: NewNotification | null,
+) {
+  if (!notification) return notifications;
+  return [makeNotification(notification), ...notifications].slice(0, MAX_NOTIFICATIONS);
+}
+
+function userParticipatesInAuction(auction: Auction, bid: Bid, user: User | null) {
+  if (!user) return false;
+  if (user.role === "ADMIN") return true;
+  if (bid.carrier === user.name) return true;
+
+  return (
+    auction.leader === user.name ||
+    auction.winner === user.name ||
+    auction.bids.some((existingBid) => existingBid.carrier === user.name)
+  );
 }
 
 function readStoredSession(): StoredSession | null {
@@ -154,6 +215,8 @@ export const useStore = create<StoreState>((set, get) => ({
   auctions: seedAuctions(),
   cargos: seedCargos(),
   carriers: seedCarriers(),
+  notifications: [],
+  closingSoonNotifiedAuctionIds: [],
   wsStatus: "closed",
 
   login: async (email, password) => {
@@ -191,6 +254,18 @@ export const useStore = create<StoreState>((set, get) => ({
   setAuctions: (auctions) => set({ auctions }),
   setCargos: (cargos) => set({ cargos }),
   setCarriers: (carriers) => set({ carriers }),
+  addNotification: (notification) =>
+    set((state) => ({
+      notifications: prependNotification(state.notifications, notification),
+    })),
+  markNotificationsRead: () =>
+    set((state) => ({
+      notifications: state.notifications.map((notification) => ({
+        ...notification,
+        read: true,
+      })),
+    })),
+  clearNotifications: () => set({ notifications: [] }),
 
   updateProfile: (patch) =>
     set((state) => {
@@ -202,8 +277,9 @@ export const useStore = create<StoreState>((set, get) => ({
     }),
 
   addBidToAuction: (auctionId, bid) => {
-    set((state) => ({
-      auctions: state.auctions.map((a) => {
+    set((state) => {
+      let notificationToAdd: NewNotification | null = null;
+      const auctions = state.auctions.map((a) => {
         if (a.id !== auctionId) return a;
         if (a.status !== "ABERTO") return a;
         if (a.bids.some((existingBid) => existingBid.id === bid.id)) return a;
@@ -248,16 +324,38 @@ export const useStore = create<StoreState>((set, get) => ({
             timestamp: bid.timestamp,
           });
         }
-        if (typeof window !== "undefined") {
-          if (user?.role === "TRANSPORTADORA" && prevLeader === user.name && bid.carrier !== user.name) {
+        if (typeof window !== "undefined" && userParticipatesInAuction(a, bid, user)) {
+          if (
+            user?.role === "TRANSPORTADORA" &&
+            prevLeader === user.name &&
+            bid.carrier !== user.name
+          ) {
+            notificationToAdd = {
+              kind: "BID",
+              auctionId,
+              title: "Seu lance foi superado",
+              description: `${bid.carrier} registrou um lance menor em ${routeLabel}: ${bidLabel}.`,
+            };
             toast.warning("Seu lance foi superado", {
               description: `${bid.carrier} registrou um lance menor em ${routeLabel}: ${bidLabel}.`,
             });
           } else if (user?.role === "TRANSPORTADORA" && bid.carrier === user.name) {
+            notificationToAdd = {
+              kind: "BID",
+              auctionId,
+              title: "Você assumiu a liderança",
+              description: `Seu novo menor lance em ${routeLabel} é ${bidLabel}.`,
+            };
             toast.success("Você assumiu a liderança", {
               description: `Seu novo menor lance é ${bidLabel}.`,
             });
           } else {
+            notificationToAdd = {
+              kind: "BID",
+              auctionId,
+              title: "Novo menor lance registrado",
+              description: `${bid.carrier} registrou ${bidLabel} em ${routeLabel}.`,
+            };
             toast.info("Novo menor lance registrado", {
               description: `${bid.carrier} registrou ${bidLabel} em ${routeLabel}.`,
             });
@@ -270,8 +368,13 @@ export const useStore = create<StoreState>((set, get) => ({
           bids: newBids,
           events,
         };
-      }),
-    }));
+      });
+
+      return {
+        auctions,
+        notifications: prependNotification(state.notifications, notificationToAdd),
+      };
+    });
   },
 
   closeAuction: (auctionId) => {
@@ -339,6 +442,43 @@ export const useStore = create<StoreState>((set, get) => ({
 
   tick: () => {
     const now = Date.now();
+    const state = get();
+    const endingSoon = state.auctions.filter((a) => {
+      const remaining = a.endsAt - now;
+      return (
+        state.user &&
+        a.status === "ABERTO" &&
+        remaining > 0 &&
+        remaining <= CLOSING_SOON_MS &&
+        !state.closingSoonNotifiedAuctionIds.includes(a.id)
+      );
+    });
+
+    if (endingSoon.length > 0) {
+      endingSoon.forEach((auction) => {
+        const minutes = Math.max(1, Math.ceil((auction.endsAt - now) / 60000));
+        const routeLabel = `${auction.cargo.origin.split(" - ")[0]} → ${auction.cargo.destination.split(" - ")[0]}`;
+        const description = `${routeLabel} termina em aproximadamente ${minutes} min.`;
+
+        get().addNotification({
+          kind: "CLOSING_SOON",
+          auctionId: auction.id,
+          title: "Leilão encerrando",
+          description,
+        });
+        toast.warning("Leilão encerrando", { description });
+      });
+
+      set((current) => ({
+        closingSoonNotifiedAuctionIds: [
+          ...new Set([
+            ...current.closingSoonNotifiedAuctionIds,
+            ...endingSoon.map((auction) => auction.id),
+          ]),
+        ],
+      }));
+    }
+
     const toClose = get().auctions.filter((a) => a.status === "ABERTO" && a.endsAt <= now);
     if (toClose.length > 0) {
       toClose.forEach((a) => get().closeAuction(a.id));

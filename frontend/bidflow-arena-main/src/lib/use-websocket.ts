@@ -30,7 +30,9 @@ function carrierLabel(carrierId?: string) {
 
 function notifyAuctionClosed(message: WebSocketEnvelope) {
   const data = message.data ?? {};
+  const auctionId = data.auctionId ?? message.auctionId;
   const user = useStore.getState().user;
+  const addNotification = useStore.getState().addNotification;
   const winner = carrierLabel(data.winnerCarrierId) || "sem vencedor";
   const winningAmount = data.winningAmount ? Number(data.winningAmount) : null;
   const winningText =
@@ -39,15 +41,43 @@ function notifyAuctionClosed(message: WebSocketEnvelope) {
       : "";
 
   if (user?.role === "TRANSPORTADORA" && winner === user.name) {
+    addNotification({
+      kind: "AUCTION_CLOSED",
+      auctionId,
+      title: "Você venceu o leilão",
+      description: `Campeão: ${winner}${winningText}.`,
+    });
     toast.success("Você venceu o leilão", {
       description: `Campeão: ${winner}${winningText}.`,
     });
     return;
   }
 
+  addNotification({
+    kind: "AUCTION_CLOSED",
+    auctionId,
+    title: "Leilão encerrado",
+    description: `Campeão: ${winner}${winningText}.`,
+  });
   toast.info("Leilão encerrado", {
     description: `Campeão: ${winner}${winningText}.`,
   });
+}
+
+function notifyAuctionOpened(message: WebSocketEnvelope) {
+  const data = message.data ?? {};
+  const auctionId = data.auctionId ?? message.auctionId;
+  const description = auctionId
+    ? `Leilão ${auctionId.slice(0, 8)} foi criado e já está disponível.`
+    : "Um novo leilão foi criado e já está disponível.";
+
+  useStore.getState().addNotification({
+    kind: "AUCTION_OPENED",
+    auctionId,
+    title: "Novo leilão criado",
+    description,
+  });
+  toast.info("Novo leilão criado", { description });
 }
 
 function handleRealtimeMessage(message: WebSocketEnvelope, updateStore: boolean) {
@@ -74,6 +104,10 @@ function handleRealtimeMessage(message: WebSocketEnvelope, updateStore: boolean)
     if (updateStore && eventAuctionId) {
       useStore.getState().closeAuction(eventAuctionId);
     }
+  }
+
+  if (message.type === "auction.opened") {
+    notifyAuctionOpened(message);
   }
 }
 

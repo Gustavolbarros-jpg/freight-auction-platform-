@@ -4,7 +4,7 @@ import { Activity, TrendingDown, Trophy, DollarSign, ArrowRight } from "lucide-r
 import { LineChart, Line, ResponsiveContainer, Tooltip as RTooltip } from "recharts";
 import { AppShell } from "@/components/app-shell";
 import { useAuctions } from "@/hooks/useAuctions";
-import { useStore, formatBRL } from "@/lib/store";
+import { useStore, formatBRL, type Auction } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/dashboard")({
@@ -32,6 +32,8 @@ function DashboardContent() {
   const auctions = remoteAuctions ?? localAuctions;
   const [tab, setTab] = useState<"open" | "history">("open");
   const [, force] = useState(0);
+  const isAdmin = user?.role === "ADMIN";
+  const userName = user?.name ?? "";
 
   useEffect(() => {
     const t = setInterval(() => force((n) => n + 1), 1000);
@@ -39,12 +41,27 @@ function DashboardContent() {
   }, []);
 
   const openCount = auctions.filter((a) => getDisplayAuctionStatus(a) === "ABERTO").length;
-  const sentBids = auctions.reduce((acc, a) => acc + a.bids.length, 0);
-  const wins = auctions.filter((a) => getDisplayAuctionStatus(a) === "ENCERRADO").length;
-  const winRate = auctions.length > 0 ? Math.round((wins / auctions.length) * 100) : 0;
+  const sentBids = isAdmin
+    ? auctions.reduce((acc, a) => acc + a.bids.length, 0)
+    : auctions.reduce((acc, a) => acc + a.bids.filter((bid) => bid.carrier === userName).length, 0);
+  const userClosedAuctions = auctions.filter(
+    (a) => getDisplayAuctionStatus(a) === "ENCERRADO" && auctionHasCarrier(a, userName),
+  );
+  const userWins = userClosedAuctions.filter((a) => a.winner === userName).length;
+  const winRate =
+    userClosedAuctions.length > 0 ? Math.round((userWins / userClosedAuctions.length) * 100) : 0;
   const savings = auctions
     .filter((a) => getDisplayAuctionStatus(a) === "ENCERRADO")
     .reduce((acc, a) => acc + (a.initialValue - a.bestBid), 0);
+  const topCarrier = getTopCarrierThisMonth(auctions);
+  const carrierMonthlyTotal = auctions
+    .filter(
+      (a) =>
+        getDisplayAuctionStatus(a) === "ENCERRADO" &&
+        a.winner === userName &&
+        isCurrentMonth(a.endsAt),
+    )
+    .reduce((acc, a) => acc + a.bestBid, 0);
 
   const spark = Array.from({ length: 14 }).map((_, i) => ({
     v: 20 + Math.round(Math.sin(i / 2) * 12 + Math.random() * 10),
@@ -53,7 +70,11 @@ function DashboardContent() {
   const visible =
     tab === "open"
       ? auctions.filter((a) => getDisplayAuctionStatus(a) === "ABERTO")
-      : auctions.filter((a) => getDisplayAuctionStatus(a) === "ENCERRADO");
+      : auctions.filter(
+          (a) =>
+            getDisplayAuctionStatus(a) === "ENCERRADO" &&
+            (isAdmin || auctionHasCarrier(a, userName)),
+        );
 
   return (
     <div className="space-y-6">
@@ -89,7 +110,7 @@ function DashboardContent() {
           tone="primary"
         />
         <MetricCard
-          label="Lances Enviados"
+          label={isAdmin ? "Total de Lances" : "Meus Lances"}
           value={String(sentBids)}
           icon={TrendingDown}
           tone="primary"
@@ -102,43 +123,63 @@ function DashboardContent() {
             </ResponsiveContainer>
           }
         />
-        <MetricCard
-          label="Taxa de Vitórias"
-          value={`${winRate}%`}
-          icon={Trophy}
-          tone="success"
-          chart={
-            <div className="relative h-9 w-9">
-              <svg viewBox="0 0 36 36" className="h-9 w-9 -rotate-90">
-                <circle
-                  cx="18"
-                  cy="18"
-                  r="14"
-                  stroke="rgba(255,255,255,0.08)"
-                  strokeWidth="3"
-                  fill="none"
-                />
-                <circle
-                  cx="18"
-                  cy="18"
-                  r="14"
-                  stroke="#16A34A"
-                  strokeWidth="3"
-                  fill="none"
-                  strokeDasharray={`${(winRate / 100) * 88} 88`}
-                  strokeLinecap="round"
-                />
-              </svg>
-            </div>
-          }
-        />
-        <MetricCard
-          label="Economia Gerada"
-          value={formatBRL(savings)}
-          icon={DollarSign}
-          tone="success"
-          delta="+12,4% vs mês passado"
-        />
+        {isAdmin ? (
+          <MetricCard
+            label="Top Transportadora/Mês"
+            value={topCarrier?.name ?? "—"}
+            icon={Trophy}
+            tone="success"
+            delta={topCarrier ? `${topCarrier.wins} vitória(s) no mês` : "Sem vitórias no mês"}
+          />
+        ) : (
+          <MetricCard
+            label="Taxa de Vitórias"
+            value={`${winRate}%`}
+            icon={Trophy}
+            tone="success"
+            chart={
+              <div className="relative h-9 w-9">
+                <svg viewBox="0 0 36 36" className="h-9 w-9 -rotate-90">
+                  <circle
+                    cx="18"
+                    cy="18"
+                    r="14"
+                    stroke="rgba(255,255,255,0.08)"
+                    strokeWidth="3"
+                    fill="none"
+                  />
+                  <circle
+                    cx="18"
+                    cy="18"
+                    r="14"
+                    stroke="#16A34A"
+                    strokeWidth="3"
+                    fill="none"
+                    strokeDasharray={`${(winRate / 100) * 88} 88`}
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </div>
+            }
+          />
+        )}
+        {isAdmin ? (
+          <MetricCard
+            label="Economia Gerada"
+            value={formatBRL(savings)}
+            icon={DollarSign}
+            tone="success"
+            delta="+12,4% vs mês passado"
+          />
+        ) : (
+          <MetricCard
+            label="Total Gasto no Mês"
+            value={formatBRL(carrierMonthlyTotal)}
+            icon={DollarSign}
+            tone="success"
+            delta="Soma dos leilões vencidos"
+          />
+        )}
       </div>
 
       <div className="rounded-xl border border-border bg-[var(--surface)]">
@@ -251,6 +292,38 @@ function getDisplayAuctionStatus(auction: { status: "ABERTO" | "ENCERRADO"; ends
   }
 
   return auction.status;
+}
+
+function auctionHasCarrier(auction: Auction, carrierName: string) {
+  if (!carrierName) return false;
+  return auction.winner === carrierName || auction.bids.some((bid) => bid.carrier === carrierName);
+}
+
+function isCurrentMonth(timestamp: number) {
+  const date = new Date(timestamp);
+  const now = new Date();
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+}
+
+function getTopCarrierThisMonth(auctions: Auction[]) {
+  const wins = new Map<string, number>();
+
+  for (const auction of auctions) {
+    if (
+      getDisplayAuctionStatus(auction) !== "ENCERRADO" ||
+      !auction.winner ||
+      !isCurrentMonth(auction.endsAt)
+    ) {
+      continue;
+    }
+
+    wins.set(auction.winner, (wins.get(auction.winner) ?? 0) + 1);
+  }
+
+  const [name, count] =
+    [...wins.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0] ?? [];
+
+  return name ? { name, wins: count } : null;
 }
 
 function MetricCard({
