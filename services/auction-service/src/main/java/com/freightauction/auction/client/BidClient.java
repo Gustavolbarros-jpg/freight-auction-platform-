@@ -22,7 +22,7 @@ public class BidClient {
     public Optional<BestBidResponse> findBestBid(UUID auctionId) {
         try {
             BestBidResponse response = restClient.get()
-                    .uri("/bids/auctions/{auctionId}/best", auctionId)
+                    .uri("/v1/bids/auctions/{auctionId}/best", auctionId)
                     .retrieve()
                     .body(BestBidResponse.class);
             return Optional.ofNullable(response);
