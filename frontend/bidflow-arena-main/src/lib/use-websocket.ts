@@ -22,6 +22,8 @@ interface WebSocketEnvelope {
 
 function carrierLabel(carrierId?: string) {
   if (!carrierId) return "Transportadora";
+  const carrier = useStore.getState().carriers.find((item) => item.id === carrierId);
+  if (carrier) return carrier.name;
   return `TRP-${carrierId.slice(0, 8)}`;
 }
 

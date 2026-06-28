@@ -426,30 +426,20 @@ function parseMoneyInput(value: string) {
 
   if (!cleaned) return Number.NaN;
 
-  const commaCount = (cleaned.match(/,/g) ?? []).length;
-  const dotCount = (cleaned.match(/\./g) ?? []).length;
   const lastComma = cleaned.lastIndexOf(",");
   const lastDot = cleaned.lastIndexOf(".");
+  const decimalSeparator = lastComma > lastDot ? "," : ".";
 
   if (lastComma === -1 && lastDot === -1) {
     return Number(cleaned);
   }
 
-  if (commaCount > 0 && dotCount > 0) {
-    const decimalSeparator = lastComma > lastDot ? "," : ".";
-    const thousandsSeparator = decimalSeparator === "," ? "." : ",";
-    return Number(cleaned.replaceAll(thousandsSeparator, "").replace(decimalSeparator, "."));
-  }
+  const thousandsSeparator = decimalSeparator === "," ? "." : ",";
+  const normalized = cleaned
+    .replaceAll(thousandsSeparator, "")
+    .replace(decimalSeparator, ".");
 
-  const separator = commaCount > 0 ? "," : ".";
-  const separatorCount = commaCount > 0 ? commaCount : dotCount;
-  const [integerPart, decimalPart = ""] = cleaned.split(separator);
-
-  if (separatorCount === 1 && decimalPart.length > 0 && decimalPart.length <= 2) {
-    return Number(`${integerPart}.${decimalPart}`);
-  }
-
-  return Number(cleaned.replaceAll(separator, ""));
+  return Number(normalized);
 }
 
 function Field({ icon, label, value }: { icon?: React.ReactNode; label: string; value: string }) {

@@ -78,6 +78,8 @@ interface StoreState {
   login: (email: string, password: string) => Promise<User>;
   logout: () => void;
   setAuctions: (auctions: Auction[]) => void;
+  setCargos: (cargos: Cargo[]) => void;
+  setCarriers: (carriers: Carrier[]) => void;
   updateProfile: (patch: { name?: string; email?: string }) => void;
   addBidToAuction: (auctionId: string, bid: Bid) => void;
   closeAuction: (auctionId: string) => void;
@@ -103,6 +105,36 @@ interface AuthResponse {
   role: Role;
 }
 
+interface StoredSession {
+  token: string;
+  user: User;
+}
+
+function readStoredSession(): StoredSession | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem("freightbid.session");
+    if (!raw) return null;
+    const session = JSON.parse(raw) as StoredSession;
+    if (!session.token || !session.user) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredSession(session: StoredSession | null) {
+  if (typeof window === "undefined") return;
+
+  if (!session) {
+    window.localStorage.removeItem("freightbid.session");
+    return;
+  }
+
+  window.localStorage.setItem("freightbid.session", JSON.stringify(session));
+}
+
 async function readAuthError(response: Response) {
   try {
     const data = await response.json();
@@ -112,9 +144,11 @@ async function readAuthError(response: Response) {
   }
 }
 
+const storedSession = readStoredSession();
+
 export const useStore = create<StoreState>((set, get) => ({
-  token: null,
-  user: null,
+  token: storedSession?.token ?? null,
+  user: storedSession?.user ?? null,
   auctions: seedAuctions(),
   cargos: seedCargos(),
   carriers: seedCarriers(),
@@ -143,12 +177,18 @@ export const useStore = create<StoreState>((set, get) => ({
       role,
     };
     set({ user, token: data.token });
+    writeStoredSession({ user, token: data.token });
     return user;
   },
 
-  logout: () => set({ user: null, token: null }),
+  logout: () => {
+    writeStoredSession(null);
+    set({ user: null, token: null });
+  },
 
   setAuctions: (auctions) => set({ auctions }),
+  setCargos: (cargos) => set({ cargos }),
+  setCarriers: (carriers) => set({ carriers }),
 
   updateProfile: (patch) =>
     set((state) => ({ user: state.user ? { ...state.user, ...patch } : state.user })),

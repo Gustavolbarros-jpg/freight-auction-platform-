@@ -4,6 +4,7 @@ import { Zap, CheckCircle, TrendingDown, Truck, Plus, X, Loader2 } from "lucide-
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { useAuctions } from "@/hooks/useAuctions";
+import { useCarriers } from "@/hooks/useCarriers";
 import { apiFetch } from "@/lib/api";
 import { useStore, formatBRL, type Auction } from "@/lib/store";
 import { StatusBadge } from "./dashboard";
@@ -31,6 +32,7 @@ type Tab = "cargos" | "auctions" | "carriers";
 
 function AdminContent() {
   const { refetch } = useAuctions();
+  useCarriers();
   const auctions = useStore((s) => s.auctions);
   const cargos = useStore((s) => s.cargos);
   const carriers = useStore((s) => s.carriers);

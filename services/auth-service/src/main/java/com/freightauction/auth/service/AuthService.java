@@ -1,6 +1,7 @@
 package com.freightauction.auth.service;
 
 import com.freightauction.auth.domain.User;
+import com.freightauction.auth.domain.UserRole;
 import com.freightauction.auth.dto.AuthResponse;
 import com.freightauction.auth.dto.LoginRequest;
 import com.freightauction.auth.dto.RegisterRequest;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
+import java.util.List;
 
 @Service
 public class AuthService {
@@ -79,6 +81,23 @@ public class AuthService {
     public TokenValidationResponse validate(String authorizationHeader) {
         AuthenticatedUser user = jwtService.validate(extractBearerToken(authorizationHeader));
         return new TokenValidationResponse(true, user.userId(), user.role(), user.expiresAt());
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserResponse> findUsers(UserRole role) {
+        List<User> users = role == null
+                ? userRepository.findAll()
+                : userRepository.findByRoleOrderByCreatedAtDesc(role);
+
+        return users.stream()
+                .map(user -> new UserResponse(
+                        user.getId(),
+                        user.getName(),
+                        user.getEmail(),
+                        user.getRole(),
+                        user.getCreatedAt()
+                ))
+                .toList();
     }
 
     private String extractBearerToken(String authorizationHeader) {
