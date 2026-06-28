@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -30,6 +31,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
+        if (HttpMethod.OPTIONS.matches(request.getMethod())) {
+            return true;
+        }
+
         String path = request.getRequestURI();
         for (String publicPath : PUBLIC_PATHS) {
             if (path.startsWith(publicPath)) {
@@ -50,7 +55,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             JwtTokenVerifier.AuthenticatedUser user = tokenVerifier.verify(token);
 
             MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
-            mutableRequest.addHeader("X-User-Id",   user.userId().toString());
+            mutableRequest.addHeader("X-User-Id", user.userId().toString());
             mutableRequest.addHeader("X-User-Role", user.role());
 
             filterChain.doFilter(mutableRequest, response);

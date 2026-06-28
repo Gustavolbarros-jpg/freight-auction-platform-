@@ -12,6 +12,7 @@ public record AuctionResponse(
         AuctionStatus status,
         BigDecimal initialPrice,
         LocalDateTime startedAt,
+        Integer durationMinutes,
         LocalDateTime closedAt,
         UUID createdByUserId,
         UUID winnerCarrierId,

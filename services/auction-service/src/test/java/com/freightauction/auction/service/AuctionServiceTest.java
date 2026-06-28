@@ -244,6 +244,7 @@ class AuctionServiceTest {
                 auction.getStatus(),
                 auction.getLoad() != null ? auction.getLoad().getInitialPrice() : null,
                 auction.getStartedAt(),
+                auction.getDurationMinutes(),
                 auction.getClosedAt(),
                 auction.getCreatedByUserId(),
                 auction.getWinnerCarrierId(),
