@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { User as UserIcon, Bell } from "lucide-react";
+import { AlertTriangle, Bell, CheckCircle2, Loader2, User as UserIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useStore } from "@/lib/store";
 import { Switch } from "@/components/ui/switch";
@@ -47,6 +47,30 @@ function SettingsContent() {
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [prefs, setPrefs] = useState<NotifPrefs>(DEFAULT_PREFS);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const failedProfileSignatureRef = useRef<string | null>(null);
+
+  const normalizedProfile = useMemo(
+    () => ({
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+    }),
+    [email, name],
+  );
+  const profileSignature = `${normalizedProfile.name}\n${normalizedProfile.email}`;
+  const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedProfile.email);
+  const profileIsValid = normalizedProfile.name.length > 0 && emailIsValid;
+  const hasProfileChanges =
+    normalizedProfile.name !== user.name || normalizedProfile.email !== user.email;
+
+  useEffect(() => {
+    if (!savingProfile && !hasProfileChanges) {
+      setName(user.name);
+      setEmail(user.email);
+    }
+  }, [hasProfileChanges, savingProfile, user.email, user.name]);
 
   useEffect(() => {
     try {
@@ -65,14 +89,58 @@ function SettingsContent() {
     });
   };
 
-  const saveProfile = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !email.trim()) {
-      toast.error("Preencha nome e e-mail");
+  const saveProfile = useCallback(async (showSuccessToast = false) => {
+    if (!profileIsValid) {
+      const message = !normalizedProfile.name
+        ? "Preencha o nome de exibição"
+        : "Informe um e-mail válido";
+      setProfileError(message);
+      toast.error(message);
       return;
     }
-    updateProfile({ name: name.trim(), email: email.trim() });
-    toast.success("Perfil atualizado");
+
+    if (!hasProfileChanges) return;
+
+    setSavingProfile(true);
+    setProfileError(null);
+
+    try {
+      await updateProfile(normalizedProfile);
+      failedProfileSignatureRef.current = null;
+      setSavedAt(new Date());
+      if (showSuccessToast) {
+        toast.success("Perfil atualizado");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erro ao atualizar perfil";
+      failedProfileSignatureRef.current = profileSignature;
+      setProfileError(message);
+      toast.error(message);
+    } finally {
+      setSavingProfile(false);
+    }
+  }, [hasProfileChanges, normalizedProfile, profileIsValid, profileSignature, updateProfile]);
+
+  useEffect(() => {
+    if (
+      !hasProfileChanges ||
+      !profileIsValid ||
+      savingProfile ||
+      failedProfileSignatureRef.current === profileSignature
+    ) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void saveProfile(false);
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, [hasProfileChanges, profileIsValid, profileSignature, saveProfile, savingProfile]);
+
+  const submitProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    void saveProfile(true);
   };
 
   return (
@@ -92,12 +160,15 @@ function SettingsContent() {
             <p className="text-xs text-muted-foreground">Atualize seu nome de exibição e e-mail.</p>
           </div>
         </header>
-        <form onSubmit={saveProfile} className="space-y-4">
+        <form onSubmit={submitProfile} className="space-y-4">
           <div>
             <label className="text-xs font-medium text-muted-foreground">Nome de exibição</label>
             <input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                failedProfileSignatureRef.current = null;
+                setName(e.target.value);
+              }}
               className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:border-primary focus:outline-none"
             />
           </div>
@@ -106,16 +177,30 @@ function SettingsContent() {
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                failedProfileSignatureRef.current = null;
+                setEmail(e.target.value);
+              }}
               className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:border-primary focus:outline-none"
             />
           </div>
-          <button
-            type="submit"
-            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Salvar
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <ProfileSaveStatus
+              saving={savingProfile}
+              error={profileError}
+              savedAt={savedAt}
+              hasChanges={hasProfileChanges}
+              isValid={profileIsValid}
+            />
+            <button
+              type="submit"
+              disabled={!hasProfileChanges || !profileIsValid || savingProfile}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {savingProfile && <Loader2 className="h-4 w-4 animate-spin" />}
+              Salvar agora
+            </button>
+          </div>
         </form>
       </section>
 
@@ -158,6 +243,62 @@ function SettingsContent() {
       </section>
     </div>
   );
+}
+
+function ProfileSaveStatus({
+  saving,
+  error,
+  savedAt,
+  hasChanges,
+  isValid,
+}: {
+  saving: boolean;
+  error: string | null;
+  savedAt: Date | null;
+  hasChanges: boolean;
+  isValid: boolean;
+}) {
+  if (saving) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Salvando automaticamente...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-destructive">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        {error}
+      </div>
+    );
+  }
+
+  if (hasChanges && !isValid) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-warning">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        Preencha nome e e-mail válido para salvar.
+      </div>
+    );
+  }
+
+  if (hasChanges) {
+    return <div className="text-xs text-muted-foreground">As alterações serão salvas automaticamente.</div>;
+  }
+
+  if (savedAt) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-success">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        Salvo às {savedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+      </div>
+    );
+  }
+
+  return <div className="text-xs text-muted-foreground">Perfil sincronizado com a conta.</div>;
 }
 
 function ToggleRow({

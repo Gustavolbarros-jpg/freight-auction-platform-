@@ -6,6 +6,7 @@ import com.freightauction.auth.dto.AuthResponse;
 import com.freightauction.auth.dto.LoginRequest;
 import com.freightauction.auth.dto.RegisterRequest;
 import com.freightauction.auth.dto.TokenValidationResponse;
+import com.freightauction.auth.dto.UpdateProfileRequest;
 import com.freightauction.auth.dto.UserResponse;
 import com.freightauction.auth.exception.ConflictException;
 import com.freightauction.auth.exception.UnauthorizedException;
@@ -75,6 +76,7 @@ public class AuthService {
                 token.expiresAt(),
                 user.getId(),
                 user.getName(),
+                user.getEmail(),
                 user.getRole()
         );
     }
@@ -84,6 +86,23 @@ public class AuthService {
         return new TokenValidationResponse(true, user.userId(), user.role(), user.expiresAt());
     }
 
+    @Transactional
+    public UserResponse updateProfile(String authorizationHeader, UpdateProfileRequest request) {
+        AuthenticatedUser authenticatedUser = jwtService.validate(extractBearerToken(authorizationHeader));
+        User user = userRepository.findById(authenticatedUser.userId())
+                .orElseThrow(() -> new UnauthorizedException("User not found"));
+
+        String normalizedEmail = normalizeEmail(request.email());
+        userRepository.findByEmail(normalizedEmail)
+                .filter(existing -> !existing.getId().equals(user.getId()))
+                .ifPresent(existing -> {
+                    throw new ConflictException("Email already registered");
+                });
+
+        user.updateProfile(request.name().trim(), normalizedEmail);
+        return toUserResponse(userRepository.save(user));
+    }
+
     @Transactional(readOnly = true)
     public List<UserResponse> findUsers(UserRole role) {
         List<User> users = role == null
@@ -91,14 +110,18 @@ public class AuthService {
                 : userRepository.findByRoleOrderByCreatedAtDesc(role);
 
         return users.stream()
-                .map(user -> new UserResponse(
-                        user.getId(),
-                        user.getName(),
-                        user.getEmail(),
-                        user.getRole(),
-                        user.getCreatedAt()
-                ))
+                .map(this::toUserResponse)
                 .toList();
+    }
+
+    private UserResponse toUserResponse(User user) {
+        return new UserResponse(
+                user.getId(),
+                user.getName(),
+                user.getEmail(),
+                user.getRole(),
+                user.getCreatedAt()
+        );
     }
 
     private String extractBearerToken(String authorizationHeader) {

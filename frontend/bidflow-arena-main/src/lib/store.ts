@@ -103,7 +103,7 @@ interface StoreState {
   addNotification: (notification: NewNotification) => void;
   markNotificationsRead: () => void;
   clearNotifications: () => void;
-  updateProfile: (patch: { name?: string; email?: string }) => void;
+  updateProfile: (patch: { name: string; email: string }) => Promise<User>;
   addBidToAuction: (auctionId: string, bid: Bid) => void;
   closeAuction: (auctionId: string) => void;
   createAuction: (params: {
@@ -126,6 +126,14 @@ interface AuthResponse {
   expiresAt: string;
   userId: string;
   name?: string;
+  email?: string;
+  role: Role;
+}
+
+interface ProfileResponse {
+  id: string;
+  name: string;
+  email: string;
   role: Role;
 }
 
@@ -198,13 +206,29 @@ function writeStoredSession(session: StoredSession | null) {
   window.localStorage.setItem("freightbid.session", JSON.stringify(session));
 }
 
-async function readAuthError(response: Response) {
+async function readAuthError(response: Response, fallback = "Falha ao chamar a API") {
   try {
     const data = await response.json();
-    return data.message ?? data.error ?? "Falha ao fazer login";
+    if (data.fields) {
+      const firstFieldError = Object.values(data.fields)[0];
+      if (typeof firstFieldError === "string") return firstFieldError;
+    }
+    return data.message ?? data.detail ?? data.title ?? data.error ?? fallback;
   } catch {
-    return "Falha ao fazer login";
+    return fallback;
   }
+}
+
+function persistUserSession(user: User, token: string) {
+  writeStoredSession({ user, token });
+}
+
+function withCarrierProfile(carriers: Carrier[], user: User) {
+  return carriers.map((carrier) =>
+    carrier.id === user.id
+      ? { ...carrier, name: user.name, email: user.email }
+      : carrier,
+  );
 }
 
 const storedSession = readStoredSession();
@@ -229,7 +253,7 @@ export const useStore = create<StoreState>((set, get) => ({
     });
 
     if (!response.ok) {
-      throw new Error(await readAuthError(response));
+      throw new Error(await readAuthError(response, "Falha ao fazer login"));
     }
 
     const data = (await response.json()) as AuthResponse;
@@ -238,11 +262,11 @@ export const useStore = create<StoreState>((set, get) => ({
     const user: User = {
       id: data.userId,
       name,
-      email,
+      email: data.email ?? email,
       role,
     };
     set({ user, token: data.token });
-    writeStoredSession({ user, token: data.token });
+    persistUserSession(user, data.token);
     return user;
   },
 
@@ -267,14 +291,63 @@ export const useStore = create<StoreState>((set, get) => ({
     })),
   clearNotifications: () => set({ notifications: [] }),
 
-  updateProfile: (patch) =>
-    set((state) => {
-      const user = state.user ? { ...state.user, ...patch } : state.user;
-      if (user && state.token) {
-        writeStoredSession({ user, token: state.token });
-      }
-      return { user };
-    }),
+  updateProfile: async (patch) => {
+    const token = get().token;
+    const previousUser = get().user;
+
+    if (!token || !previousUser) {
+      throw new Error("Sessão expirada. Faça login novamente.");
+    }
+
+    const optimisticUser: User = {
+      ...previousUser,
+      name: patch.name.trim(),
+      email: patch.email.trim().toLowerCase(),
+    };
+
+    set((state) => ({
+      user: optimisticUser,
+      carriers: withCarrierProfile(state.carriers, optimisticUser),
+    }));
+    persistUserSession(optimisticUser, token);
+
+    const response = await fetch(`${API_BASE_URL}/v1/auth/me`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        name: optimisticUser.name,
+        email: optimisticUser.email,
+      }),
+    });
+
+    if (!response.ok) {
+      set((state) => ({
+        user: previousUser,
+        carriers: withCarrierProfile(state.carriers, previousUser),
+      }));
+      persistUserSession(previousUser, token);
+      throw new Error(await readAuthError(response, "Erro ao atualizar perfil"));
+    }
+
+    const data = (await response.json()) as ProfileResponse;
+    const savedUser: User = {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      role: data.role,
+    };
+
+    set((state) => ({
+      user: savedUser,
+      carriers: withCarrierProfile(state.carriers, savedUser),
+    }));
+    persistUserSession(savedUser, token);
+
+    return savedUser;
+  },
 
   addBidToAuction: (auctionId, bid) => {
     set((state) => {
