@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { toast } from "sonner";
 import { API_BASE_URL } from "./config";
 
 export type Role = "TRANSPORTADORA" | "ADMIN";
@@ -102,6 +103,7 @@ interface AuthResponse {
   tokenType: string;
   expiresAt: string;
   userId: string;
+  name?: string;
   role: Role;
 }
 
@@ -169,7 +171,7 @@ export const useStore = create<StoreState>((set, get) => ({
 
     const data = (await response.json()) as AuthResponse;
     const role = data.role;
-    const name = role === "ADMIN" ? "Admin Operações" : "Transportadora";
+    const name = data.name?.trim() || email.split("@")[0];
     const user: User = {
       id: data.userId,
       name,
@@ -191,13 +193,20 @@ export const useStore = create<StoreState>((set, get) => ({
   setCarriers: (carriers) => set({ carriers }),
 
   updateProfile: (patch) =>
-    set((state) => ({ user: state.user ? { ...state.user, ...patch } : state.user })),
+    set((state) => {
+      const user = state.user ? { ...state.user, ...patch } : state.user;
+      if (user && state.token) {
+        writeStoredSession({ user, token: state.token });
+      }
+      return { user };
+    }),
 
   addBidToAuction: (auctionId, bid) => {
     set((state) => ({
       auctions: state.auctions.map((a) => {
         if (a.id !== auctionId) return a;
         if (a.status !== "ABERTO") return a;
+        if (a.bids.some((existingBid) => existingBid.id === bid.id)) return a;
         if (bid.value >= a.bestBid) {
           const ev: AuditEvent = {
             id: crypto.randomUUID(),
@@ -210,6 +219,9 @@ export const useStore = create<StoreState>((set, get) => ({
         }
         const prevLeader = a.leader;
         const newBids = [...a.bids, bid];
+        const user = state.user;
+        const routeLabel = `${a.cargo.origin.split(" - ")[0]} → ${a.cargo.destination.split(" - ")[0]}`;
+        const bidLabel = formatBRL(bid.value);
         const events: AuditEvent[] = [
           ...(a.events ?? []),
           {
@@ -236,6 +248,21 @@ export const useStore = create<StoreState>((set, get) => ({
             timestamp: bid.timestamp,
           });
         }
+        if (typeof window !== "undefined") {
+          if (user?.role === "TRANSPORTADORA" && prevLeader === user.name && bid.carrier !== user.name) {
+            toast.warning("Seu lance foi superado", {
+              description: `${bid.carrier} registrou um lance menor em ${routeLabel}: ${bidLabel}.`,
+            });
+          } else if (user?.role === "TRANSPORTADORA" && bid.carrier === user.name) {
+            toast.success("Você assumiu a liderança", {
+              description: `Seu novo menor lance é ${bidLabel}.`,
+            });
+          } else {
+            toast.info("Novo menor lance registrado", {
+              description: `${bid.carrier} registrou ${bidLabel} em ${routeLabel}.`,
+            });
+          }
+        }
         return {
           ...a,
           bestBid: bid.value,
@@ -251,6 +278,7 @@ export const useStore = create<StoreState>((set, get) => ({
     set((state) => ({
       auctions: state.auctions.map((a) => {
         if (a.id !== auctionId) return a;
+        if (a.status === "ENCERRADO") return a;
         const events: AuditEvent[] = [
           ...(a.events ?? []),
           {

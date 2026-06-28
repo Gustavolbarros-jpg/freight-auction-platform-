@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { useStore, type Bid } from "./store";
 
 interface WebSocketEnvelope {
@@ -25,6 +26,101 @@ function carrierLabel(carrierId?: string) {
   const carrier = useStore.getState().carriers.find((item) => item.id === carrierId);
   if (carrier) return carrier.name;
   return `TRP-${carrierId.slice(0, 8)}`;
+}
+
+function notifyAuctionClosed(message: WebSocketEnvelope) {
+  const data = message.data ?? {};
+  const user = useStore.getState().user;
+  const winner = carrierLabel(data.winnerCarrierId) || "sem vencedor";
+  const winningAmount = data.winningAmount ? Number(data.winningAmount) : null;
+  const winningText =
+    winningAmount && Number.isFinite(winningAmount)
+      ? ` por ${winningAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`
+      : "";
+
+  if (user?.role === "TRANSPORTADORA" && winner === user.name) {
+    toast.success("Você venceu o leilão", {
+      description: `Campeão: ${winner}${winningText}.`,
+    });
+    return;
+  }
+
+  toast.info("Leilão encerrado", {
+    description: `Campeão: ${winner}${winningText}.`,
+  });
+}
+
+function handleRealtimeMessage(message: WebSocketEnvelope, updateStore: boolean) {
+  const data = message.data ?? {};
+  const eventAuctionId = data.auctionId ?? message.auctionId;
+
+  if (message.type === "bid.validated") {
+    if (!eventAuctionId || !data.bidId || !data.amount) return;
+
+    if (updateStore) {
+      const bid: Bid = {
+        id: data.bidId,
+        carrier: carrierLabel(data.carrierId),
+        value: Number(data.amount),
+        timestamp: data.receivedAt ?? message.sentAt ?? new Date().toISOString(),
+      };
+
+      useStore.getState().addBidToAuction(eventAuctionId, bid);
+    }
+  }
+
+  if (message.type === "auction.closed") {
+    notifyAuctionClosed(message);
+    if (updateStore && eventAuctionId) {
+      useStore.getState().closeAuction(eventAuctionId);
+    }
+  }
+}
+
+export function useGlobalNotifications() {
+  const setWsStatus = useStore((s) => s.setWsStatus);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let cancelled = false;
+    setWsStatus("connecting");
+
+    const tryConnect = () => {
+      try {
+        const ws = new WebSocket("ws://localhost:8083");
+        wsRef.current = ws;
+
+        ws.onopen = () => setWsStatus("open");
+
+        ws.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data) as WebSocketEnvelope;
+            handleRealtimeMessage(message, true);
+          } catch (error) {
+            console.error("Erro ao processar notificação global WebSocket", error);
+          }
+        };
+
+        ws.onclose = () => {
+          setWsStatus("closed");
+          if (!cancelled) setTimeout(tryConnect, 3000);
+        };
+
+        ws.onerror = () => ws.close();
+      } catch {
+        setWsStatus("closed");
+      }
+    };
+
+    tryConnect();
+
+    return () => {
+      cancelled = true;
+      wsRef.current?.close();
+    };
+  }, [setWsStatus]);
 }
 
 export function useAuctionWebSocket(auctionId: string) {

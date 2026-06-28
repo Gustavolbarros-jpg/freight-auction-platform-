@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Package,
   MapPin,
@@ -8,9 +8,9 @@ import {
   Send,
   Crown,
   BarChart2,
-  Truck,
   CheckCircle2,
   Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
@@ -52,6 +52,8 @@ function AuctionContent() {
   const [submitting, setSubmitting] = useState(false);
   const [flashKey, setFlashKey] = useState(0);
   const [prevBest, setPrevBest] = useState(auction?.bestBid ?? 0);
+  const [leadAlert, setLeadAlert] = useState<{ leader: string; value: number } | null>(null);
+  const previousLeaderRef = useRef<string | null | undefined>(undefined);
   const [, force] = useState(0);
 
   useEffect(() => {
@@ -61,11 +63,23 @@ function AuctionContent() {
 
   useEffect(() => {
     if (!auction) return;
+    const previousLeader = previousLeaderRef.current;
+
     if (auction.bestBid !== prevBest) {
       setFlashKey((k) => k + 1);
+      if (
+        user?.role === "TRANSPORTADORA" &&
+        previousLeader === user.name &&
+        auction.leader &&
+        auction.leader !== user.name &&
+        auction.bestBid < prevBest
+      ) {
+        setLeadAlert({ leader: auction.leader, value: auction.bestBid });
+      }
       setPrevBest(auction.bestBid);
     }
-  }, [auction?.bestBid, prevBest, auction]);
+    previousLeaderRef.current = auction.leader;
+  }, [auction?.bestBid, auction?.leader, prevBest, auction, user?.name, user?.role]);
 
   const ranking = useMemo(() => {
     if (!auction) return [];
@@ -74,7 +88,9 @@ function AuctionContent() {
       const cur = bestPerCarrier.get(b.carrier);
       if (!cur || b.value < cur.value) bestPerCarrier.set(b.carrier, b);
     }
-    return [...bestPerCarrier.values()].sort((a, b) => a.value - b.value);
+    return [...bestPerCarrier.values()].sort(
+      (a, b) => a.value - b.value || new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    );
   }, [auction]);
 
   const recentEvents = useMemo(() => (auction?.events ?? []).slice(-12).reverse(), [auction]);
@@ -129,6 +145,7 @@ function AuctionContent() {
   };
 
   const won = auction.status === "ENCERRADO" && auction.winner === user?.name;
+  const winnerLabel = auction.winner ?? auction.leader ?? "—";
 
   return (
     <div className="space-y-4">
@@ -156,6 +173,29 @@ function AuctionContent() {
           <StatusBadge status={auction.status} />
         </div>
       </div>
+
+      {leadAlert && auction.status === "ABERTO" && user?.role === "TRANSPORTADORA" && (
+        <div className="flex items-start gap-3 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm animate-slide-in-right">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold text-warning">Seu lance foi superado</div>
+            <div className="text-muted-foreground">
+              {leadAlert.leader} registrou um lance menor:{" "}
+              <span className="font-mono-tnum font-semibold text-foreground">
+                {formatBRL(leadAlert.value)}
+              </span>
+              .
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLeadAlert(null)}
+            className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-background hover:text-foreground"
+          >
+            Entendi
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr_280px]">
         {/* LEFT - cargo details */}
@@ -324,7 +364,11 @@ function AuctionContent() {
                 )}
                 <div>
                   <div className={cn("text-sm font-semibold", won && "text-success")}>
-                    {won ? "Você venceu o leilão!" : `Vencedor: ${auction.winner ?? "—"}`}
+                    {user?.role === "ADMIN"
+                      ? `Leilão encerrado. Campeão: ${winnerLabel}`
+                      : won
+                        ? "Você venceu o leilão!"
+                        : `Vencedor: ${winnerLabel}`}
                   </div>
                   <div className="font-mono-tnum text-xl font-bold">
                     {formatBRL(auction.bestBid)}

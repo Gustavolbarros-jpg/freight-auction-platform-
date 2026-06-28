@@ -19,7 +19,7 @@ function createWebSocketServer(port) {
 
 function broadcast(wss, auctionId, payload) {
     wss.clients.forEach((client) => {
-        if (client.auctionId === auctionId && client.readyState === WebSocket.OPEN) {
+        if ((client.auctionId === auctionId || !client.auctionId) && client.readyState === WebSocket.OPEN) {
             client.send(payload);
         }
     });

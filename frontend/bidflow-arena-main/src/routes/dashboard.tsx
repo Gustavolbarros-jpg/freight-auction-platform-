@@ -26,6 +26,7 @@ function Dashboard() {
 }
 
 function DashboardContent() {
+  const user = useStore((s) => s.user);
   const localAuctions = useStore((s) => s.auctions);
   const { data: remoteAuctions, isLoading, error } = useAuctions();
   const auctions = remoteAuctions ?? localAuctions;
@@ -37,12 +38,12 @@ function DashboardContent() {
     return () => clearInterval(t);
   }, []);
 
-  const openCount = auctions.filter((a) => a.status === "ABERTO").length;
+  const openCount = auctions.filter((a) => getDisplayAuctionStatus(a) === "ABERTO").length;
   const sentBids = auctions.reduce((acc, a) => acc + a.bids.length, 0);
-  const wins = auctions.filter((a) => a.status === "ENCERRADO").length;
+  const wins = auctions.filter((a) => getDisplayAuctionStatus(a) === "ENCERRADO").length;
   const winRate = auctions.length > 0 ? Math.round((wins / auctions.length) * 100) : 0;
   const savings = auctions
-    .filter((a) => a.status === "ENCERRADO")
+    .filter((a) => getDisplayAuctionStatus(a) === "ENCERRADO")
     .reduce((acc, a) => acc + (a.initialValue - a.bestBid), 0);
 
   const spark = Array.from({ length: 14 }).map((_, i) => ({
@@ -51,15 +52,19 @@ function DashboardContent() {
 
   const visible =
     tab === "open"
-      ? auctions.filter((a) => a.status === "ABERTO")
-      : auctions.filter((a) => a.status === "ENCERRADO");
+      ? auctions.filter((a) => getDisplayAuctionStatus(a) === "ABERTO")
+      : auctions.filter((a) => getDisplayAuctionStatus(a) === "ENCERRADO");
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Painel da Transportadora</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {user?.role === "ADMIN" ? "Dashboard de Leilões" : "Painel da Transportadora"}
+        </h1>
         <p className="text-sm text-muted-foreground">
-          Acompanhe leilões abertos e participe em tempo real.
+          {user?.role === "ADMIN"
+            ? "Visualize os leilões e acompanhe a disputa em tempo real."
+            : "Acompanhe leilões abertos e participe em tempo real."}
         </p>
       </div>
 
@@ -171,7 +176,15 @@ function DashboardContent() {
                   const remaining = Math.max(0, Math.floor((a.endsAt - Date.now()) / 1000));
                   const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
                   const ss = String(remaining % 60).padStart(2, "0");
-                  const ending = remaining < 300 && a.status === "ABERTO";
+                  const displayStatus = getDisplayAuctionStatus(a);
+                  const ending = remaining > 0 && remaining < 300 && displayStatus === "ABERTO";
+                  const primaryAction = user?.role !== "ADMIN" && displayStatus === "ABERTO";
+                  const actionLabel =
+                    user?.role === "ADMIN"
+                      ? "Visualizar"
+                      : displayStatus === "ABERTO"
+                        ? "Participar"
+                        : "Ver detalhes";
                   return (
                     <tr
                       key={a.id}
@@ -189,7 +202,7 @@ function DashboardContent() {
                         {formatBRL(a.bestBid)}
                       </Td>
                       <Td>
-                        {a.status === "ENCERRADO" ? (
+                        {displayStatus === "ENCERRADO" ? (
                           <span className="text-muted-foreground">—</span>
                         ) : (
                           <span
@@ -203,7 +216,7 @@ function DashboardContent() {
                         )}
                       </Td>
                       <Td>
-                        <StatusBadge status={ending ? "ENCERRANDO" : a.status} />
+                        <StatusBadge status={ending ? "ENCERRANDO" : displayStatus} />
                       </Td>
                       <Td className="text-right">
                         <Link
@@ -211,12 +224,12 @@ function DashboardContent() {
                           params={{ id: a.id }}
                           className={cn(
                             "inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                            a.status === "ABERTO"
+                            primaryAction
                               ? "bg-primary text-primary-foreground hover:bg-primary/90"
                               : "border border-border text-muted-foreground hover:bg-[var(--row-hover)]",
                           )}
                         >
-                          {a.status === "ABERTO" ? "Participar" : "Ver detalhes"}
+                          {actionLabel}
                           <ArrowRight className="h-3 w-3" />
                         </Link>
                       </Td>
@@ -230,6 +243,14 @@ function DashboardContent() {
       </div>
     </div>
   );
+}
+
+function getDisplayAuctionStatus(auction: { status: "ABERTO" | "ENCERRADO"; endsAt: number }) {
+  if (auction.status === "ABERTO" && auction.endsAt <= Date.now()) {
+    return "ENCERRADO";
+  }
+
+  return auction.status;
 }
 
 function MetricCard({

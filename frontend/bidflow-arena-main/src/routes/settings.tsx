@@ -137,8 +137,8 @@ function SettingsContent() {
             onChange={() => togglePref("newAuction")}
           />
           <ToggleRow
-            label="Lance superado"
-            description="Avisar quando outra transportadora der um lance menor que o seu."
+            label="Novo menor lance"
+            description="Avisar a cada novo menor lance registrado; se você era líder, o aviso informa que seu lance foi superado."
             checked={prefs.bidSurpassed}
             onChange={() => togglePref("bidSurpassed")}
           />
@@ -150,7 +150,7 @@ function SettingsContent() {
           />
           <ToggleRow
             label="Resultado de leilão"
-            description="Avisar quando um leilão for encerrado (vitória ou derrota)."
+            description="Avisar quando um leilão for encerrado e mostrar a transportadora campeã."
             checked={prefs.auctionResult}
             onChange={() => togglePref("auctionResult")}
           />

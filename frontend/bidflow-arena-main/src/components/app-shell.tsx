@@ -12,7 +12,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { useGlobalTick } from "@/lib/use-websocket";
+import { useGlobalNotifications, useGlobalTick } from "@/lib/use-websocket";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -38,6 +38,7 @@ export function AppShell({ children, requireAdmin = false }: { children: ReactNo
   const [hydrated, setHydrated] = useState(false);
 
   useGlobalTick();
+  useGlobalNotifications();
 
   useEffect(() => {
     setHydrated(true);

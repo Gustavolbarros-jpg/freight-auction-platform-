@@ -74,6 +74,7 @@ public class AuthService {
                 "Bearer",
                 token.expiresAt(),
                 user.getId(),
+                user.getName(),
                 user.getRole()
         );
     }
