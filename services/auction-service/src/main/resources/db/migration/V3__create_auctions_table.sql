@@ -1,4 +1,4 @@
-CREATE TABLE auctions (
+CREATE TABLE IF NOT EXISTS auctions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     load_id UUID NOT NULL UNIQUE REFERENCES loads(id),
     status VARCHAR(30) NOT NULL CHECK (status IN ('OPEN', 'CLOSED')),

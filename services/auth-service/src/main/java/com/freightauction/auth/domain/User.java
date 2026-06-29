@@ -45,6 +45,15 @@ public class User {
         this.role = role;
     }
 
+    public void updateProfile(String name, String email) {
+        this.name = name;
+        this.email = email;
+    }
+
+    public void updateProfile(String name) {
+        this.name = name;
+    }
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) {

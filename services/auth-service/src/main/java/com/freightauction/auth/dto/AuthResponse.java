@@ -10,6 +10,8 @@ public record AuthResponse(
         String tokenType,
         Instant expiresAt,
         UUID userId,
+        String name,
+        String email,
         UserRole role
 ) {
 }

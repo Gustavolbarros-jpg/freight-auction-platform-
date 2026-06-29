@@ -1,0 +1,70 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webmvc:
+          routes:
+
+            - id: auth-route
+              uri: http://auth-service:8084
+              predicates:
+                - Path=/v1/auth/**
+
+            - id: auction-loads-route
+              uri: http://auction-service:8081
+              predicates:
+                - Path=/v1/loads/**
+
+            - id: auction-auctions-route
+              uri: http://auction-service:8081
+              predicates:
+                - Path=/v1/auctions/**
+
+            - id: bid-route
+              uri: http://bid-service:8082
+              predicates:
+                - Path=/v1/bids/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+auth:
+  jwt:
+    secret: ${AUTH_JWT_SECRET:change-this-development-secret-with-32-chars}
+
+swagger:
+  services:
+    auth: http://auth-service:8084
+    auction: http://auction-service:8081
+    bid: http://bid-service:8082
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    urls:
+      - name: "Auth Service"
+        url: /api-docs/auth
+      - name: "Auction Service"
+        url: /api-docs/auction
+      - name: "Bid Service"
+        url: /api-docs/bid
+    urls-primary-name: "Auth Service"

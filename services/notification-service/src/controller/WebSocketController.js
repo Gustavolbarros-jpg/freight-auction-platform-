@@ -1,28 +1,41 @@
-const { WebSocketServer, WebSocket } = require('ws');
+const {WebSocketServer, WebSocket} = require('ws');
+const { activeConnections } = require('../metrics');
 
-function createWebSocketServer(port) {
-  const wss = new WebSocketServer({ port });
+function createWebSocketServer(serverOrPort) {
+    const wss = typeof serverOrPort === 'number'
+        ? new WebSocketServer({ port: serverOrPort })
+        : new WebSocketServer({ server: serverOrPort });
 
-  wss.on('connection', (ws, req) => {
-    const params = new URLSearchParams(req.url.replace('/?', ''));
-    ws.auctionId = params.get('auction');
+    wss.on('connection', (ws, req) => {
+        const params = new URLSearchParams(req.url.replace('/?', ''));
+        ws.auctionId = params.get('auction');
 
-    console.log(`Cliente conectado no leilao: ${ws.auctionId}`);
+        activeConnections.inc();
+        console.log(`Cliente conectado no leilao: ${ws.auctionId}`);
 
-    ws.on('close', () => {
-      console.log(`Cliente desconectado do leilao: ${ws.auctionId}`);
+        ws.on('close', () => {
+            activeConnections.dec();
+            console.log(`Cliente desconectado do leilao: ${ws.auctionId}`);
+        });
     });
-  });
 
-  return wss;
+    return wss;
 }
 
 function broadcast(wss, auctionId, payload) {
-  wss.clients.forEach((client) => {
-    if (client.auctionId === auctionId && client.readyState === WebSocket.OPEN) {
-      client.send(payload);
-    }
-  });
+    wss.clients.forEach((client) => {
+        if ((client.auctionId === auctionId || !client.auctionId) && client.readyState === WebSocket.OPEN) {
+            client.send(payload);
+        }
+    });
 }
 
-module.exports = { createWebSocketServer, broadcast };
+function broadcastAll(wss, payload) {
+    wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(payload);
+        }
+    });
+}
+
+module.exports = {createWebSocketServer, broadcast, broadcastAll};
