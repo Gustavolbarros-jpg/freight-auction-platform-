@@ -1,70 +1,75 @@
 # Freight Auction Platform
 
-Plataforma distribuida de leilao reverso de fretes. O vencedor de cada leilao e a transportadora que oferece o menor valor valido para transportar uma carga.
+Plataforma distribuída de leilão reverso de fretes. O vencedor de cada leilão é a transportadora que oferece o menor valor válido para transportar uma carga.
 
-O projeto integra backend em microsservicos, frontend web, fila, cache, bancos de dados, notificacoes em tempo real, auditoria e observabilidade com Prometheus e Grafana.
+O projeto integra backend em microsserviços, frontend web, fila, cache, bancos de dados, notificações em tempo real, auditoria e observabilidade com Prometheus e Grafana.
 
-## Sumario
+## Sumário
 
 - [Arquitetura](#arquitetura)
-- [Servicos](#servicos)
+- [Serviços](#serviços)
 - [Como rodar](#como-rodar)
 - [Acessos locais](#acessos-locais)
+- [Interface gráfica](#interface-gráfica)
 - [Fluxo principal](#fluxo-principal)
-- [Autenticacao e perfis](#autenticacao-e-perfis)
-- [Notificacoes em tempo real](#notificacoes-em-tempo-real)
+- [Controle de concorrência](#controle-de-concorrência)
+- [Autenticação e perfis](#autenticação-e-perfis)
+- [Notificações em tempo real](#notificações-em-tempo-real)
+- [Persistência de dados](#persistência-de-dados)
 - [Observabilidade](#observabilidade)
 - [Testes](#testes)
-- [Estrutura do repositorio](#estrutura-do-repositorio)
+- [Estrutura do repositório](#estrutura-do-repositório)
+- [Documentação complementar](#documentação-complementar)
 - [Status da entrega](#status-da-entrega)
 
 ## Arquitetura
 
-A aplicacao usa comunicacao sincronica por HTTP/JSON e comunicacao assincrona por RabbitMQ, Redis Pub/Sub e WebSocket.
+A aplicação usa comunicação síncrona por HTTP/JSON e comunicação assíncrona por RabbitMQ, Redis Pub/Sub e WebSocket.
 
 ```text
-Frontend
+Frontend (React) :5173
    |
    v
 API Gateway :8080
    |
-   +--> auth-service :8084 --------> PostgreSQL
-   +--> auction-service :8081 -----> PostgreSQL / MongoDB / Redis / RabbitMQ
-   +--> bid-service :8082 ---------> PostgreSQL / Redis / RabbitMQ / MongoDB
+   +--> auth-service      :8084 --------> PostgreSQL
+   +--> auction-service   :8081 -----> PostgreSQL / MongoDB / Redis / RabbitMQ
+   +--> bid-service       :8082 ---------> PostgreSQL / Redis / RabbitMQ / MongoDB
    +--> analytics-service :8085 ---> PostgreSQL / MongoDB
 
-RabbitMQ -> bid-service consumer -> Redis best bid -> Redis Pub/Sub -> notification-service :8083 -> WebSocket
+RabbitMQ -> bid-service consumer -> Redis best bid -> Redis Pub/Sub -> notification-service :8083 -> WebSocket -> Frontend
 
-Prometheus :9090 -> coleta metricas
-Grafana :3001 -> dashboards provisionados
+Prometheus :9090 -> coleta métricas
+Grafana    :3001 -> dashboards provisionados
 ```
 
-Principais decisoes:
+Principais decisões:
 
-- `PostgreSQL`: dados transacionais, como usuarios, cargas, leiloes e lances.
-- `MongoDB`: auditoria de eventos de negocio.
-- `RabbitMQ`: fila para processar lances em ordem.
-- `Redis`: melhor lance atual e Pub/Sub de eventos.
-- `WebSocket`: notificacoes em tempo real.
-- `Prometheus` e `Grafana`: metricas, saude e visualizacao operacional.
-- `Docker Compose`: ambiente local reproduzivel.
+- `PostgreSQL`: dados transacionais, como usuários, cargas, leilões e lances.
+- `MongoDB`: auditoria imutável de eventos de negócio.
+- `RabbitMQ`: fila para processar lances em ordem FIFO, evitando race conditions.
+- `Redis`: estado do melhor lance atual e Pub/Sub de eventos.
+- `Script Lua atômico`: GET + compare + SET em operação indivisível, eliminando race condition de lances concorrentes.
+- `WebSocket`: notificações em tempo real para clientes conectados.
+- `Prometheus` e `Grafana`: métricas, saúde e visualização operacional.
+- `Docker Compose`: ambiente local reproduzível com um único comando.
 
-## Servicos
+## Serviços
 
-| Servico | Tecnologia | Responsabilidade |
+| Serviço | Tecnologia | Responsabilidade |
 | --- | --- | --- |
 | `frontend` | React/TanStack Start | Interface web para ADMIN e TRANSPORTADORA |
-| `api-gateway` | Java 21/Spring Boot | Entrada unica HTTP, roteamento, CORS e JWT |
-| `auth-service` | Java 21/Spring Boot | Login, cadastro, perfil e emissao de JWT |
-| `auction-service` | Java 21/Spring Boot | Cargas, leiloes, fechamento e vencedor |
-| `bid-service` | Java 21/Spring Boot | Recebimento, validacao e processamento de lances |
-| `notification-service` | Node.js | WebSocket, Redis Pub/Sub, notificacoes e metricas |
-| `analytics-service` | Python/FastAPI | Agregacoes de leiloes, lances e transportadoras |
-| `postgres` | PostgreSQL | Banco relacional |
-| `mongo` | MongoDB | Auditoria |
+| `api-gateway` | Java 21/Spring Boot | Entrada única HTTP, roteamento, CORS e JWT |
+| `auth-service` | Java 21/Spring Boot | Login, cadastro, perfil e emissão de JWT |
+| `auction-service` | Java 21/Spring Boot | Cargas, leilões, fechamento e vencedor |
+| `bid-service` | Java 21/Spring Boot | Recebimento, validação e processamento atômico de lances |
+| `notification-service` | Node.js | WebSocket, Redis Pub/Sub, notificações e métricas |
+| `analytics-service` | Python/FastAPI | Agregações de leilões, lances e transportadoras |
+| `postgres` | PostgreSQL | Banco relacional principal |
+| `mongo` | MongoDB | Auditoria de eventos |
 | `rabbitmq` | RabbitMQ | Mensageria de lances |
 | `redis` | Redis | Cache e Pub/Sub |
-| `prometheus` | Prometheus | Coleta de metricas |
+| `prometheus` | Prometheus | Coleta de métricas |
 | `grafana` | Grafana | Dashboards |
 | `k6` | Grafana k6 | Testes de carga via profile |
 
@@ -74,6 +79,8 @@ Requisitos:
 
 - Docker
 - Docker Compose
+
+Não é necessário instalar Java, Node.js, Python ou Maven localmente. Tudo é executado dentro dos containers.
 
 Subir todo o ambiente:
 
@@ -86,6 +93,8 @@ Subir em segundo plano:
 ```bash
 docker compose up -d --build
 ```
+
+Aguarde até todos os serviços estarem healthy. O startup leva cerca de 60–90 segundos na primeira execução.
 
 Parar:
 
@@ -104,6 +113,24 @@ Ver logs:
 ```bash
 docker compose logs -f api-gateway auction-service bid-service notification-service
 ```
+
+### Criar usuários iniciais
+
+Após subir o ambiente, crie um usuário ADMIN e uma TRANSPORTADORA para acessar o sistema:
+
+```bash
+# Criar ADMIN
+curl -X POST http://localhost:8080/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Admin","email":"admin@freight.com","password":"senha123","role":"ADMIN"}'
+
+# Criar TRANSPORTADORA
+curl -X POST http://localhost:8080/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Transportadora","email":"transportadora@freight.com","password":"senha123","role":"TRANSPORTADORA"}'
+```
+
+Em seguida, acesse `http://localhost:5173` e faça login com um dos usuários criados.
 
 ## Acessos locais
 
@@ -141,24 +168,50 @@ Portas de infraestrutura:
 | Redis | `6379` |
 | RabbitMQ AMQP | `5672` |
 
+## Interface gráfica
+
+O frontend (React + TanStack Start) oferece telas distintas para os dois perfis de usuário.
+
+**Perfil ADMIN:**
+
+- Painel administrativo com métricas (leilões ativos, encerrados, lances do dia, transportadoras ativas)
+- Criação de cargas e abertura de leilões
+- Gerenciamento de transportadoras
+- Fechamento manual de leilões
+- Acesso a todo o histórico de leilões
+
+**Perfil TRANSPORTADORA:**
+
+- Dashboard com leilões abertos e histórico de participações
+- Sala de leilão em tempo real: ranking de lances, contador regressivo e formulário de lance
+- Alerta visual ao ser superado no lance
+- Taxa de vitórias e volume mensal
+
+**Funcionalidades comuns:**
+
+- Notificações em tempo real via WebSocket (sino no topo direito + pop-ups)
+- Feedback visual do status da conexão WebSocket
+- Tratamento de erros com mensagens específicas do servidor
+- Configurações de perfil (alterar nome e preferências de notificação)
+
 ## Fluxo principal
 
-O fluxo de lance implementado e:
+O fluxo de lance implementado é:
 
 ```text
 POST /v1/bids
   -> API Gateway valida JWT
-  -> bid-service valida leilao e transportadora
+  -> bid-service valida leilão e transportadora
   -> bid-service persiste lance recebido no PostgreSQL
   -> RabbitMQ ordena processamento
-  -> consumer compara lance com melhor valor no Redis usando Lua atomico
+  -> consumer compara lance com melhor valor no Redis usando Lua atômico
   -> bid-service marca lance como VALIDATED ou REJECTED
   -> Redis Pub/Sub publica evento
   -> notification-service envia WebSocket
   -> frontend atualiza ranking, pop-up e sino
 ```
 
-Estado central em memoria:
+Estado central em memória:
 
 ```text
 auction:{auctionId}:best_bid
@@ -170,21 +223,44 @@ Formato do valor no Redis:
 amount|bidId|carrierId|receivedAt
 ```
 
-Regra do leilao reverso:
+Regra do leilão reverso:
 
 - vence o menor lance;
-- empate mantem o primeiro lance processado;
-- lance igual ou maior que o menor lance atual e rejeitado;
-- leilao fechado nao aceita novos lances.
+- empate mantém o primeiro lance processado;
+- lance igual ou maior que o menor lance atual é rejeitado;
+- leilão fechado não aceita novos lances.
 
-## Autenticacao e perfis
+## Controle de concorrência
+
+O mecanismo central de trava está no script Lua `compare_and_set_best_bid.lua`, carregado no Redis pelo `bid-service`. O Redis executa o script inteiro de forma single-threaded: nenhum outro comando roda no meio, tornando o ciclo "ler → comparar → gravar" indivisível do ponto de vista de qualquer outro cliente.
+
+```lua
+local currentBestBid = redis.call('GET', KEYS[1])
+if currentBestBid == false then
+    redis.call('SET', KEYS[1], ARGV[2])
+    return 1
+end
+local separatorIndex = string.find(currentBestBid, '|')
+local currentAmount  = tonumber(string.sub(currentBestBid, 1, separatorIndex - 1))
+local newAmount      = tonumber(ARGV[1])
+if newAmount < currentAmount then
+    redis.call('SET', KEYS[1], ARGV[2])
+    return 1
+else
+    return 0
+end
+```
+
+Além do script Lua, a fila RabbitMQ garante que lances concorrentes sejam processados em ordem FIFO, e o Spring/Lettuce usa EVALSHA para reutilizar o script já carregado no Redis, evitando reenvio do texto a cada chamada.
+
+## Autenticação e perfis
 
 Perfis:
 
-- `ADMIN`: cria cargas, cria leiloes, acompanha todos os leiloes, fecha leiloes e recebe todas as notificacoes.
-- `TRANSPORTADORA`: visualiza leiloes, envia lances e recebe notificacoes dos leiloes em que participa.
+- `ADMIN`: cria cargas, cria leilões, acompanha todos os leilões, fecha leilões e recebe todas as notificações.
+- `TRANSPORTADORA`: visualiza leilões, envia lances e recebe notificações dos leilões em que participa.
 
-Criar usuario:
+Criar usuário:
 
 ```bash
 curl -X POST http://localhost:8080/v1/auth/register \
@@ -208,8 +284,8 @@ Authorization: Bearer <token>
 
 Perfil:
 
-- nome pode ser alterado em configuracoes;
-- email aparece no perfil como campo nao editavel;
+- nome pode ser alterado em configurações;
+- email aparece no perfil como campo não editável;
 - salvar perfil exige clicar em salvar.
 
 ## Endpoints principais
@@ -225,7 +301,7 @@ curl -X POST http://localhost:8080/v1/loads \
   -d '{"origin":"Recife - PE","destination":"Salvador - BA","description":"Carga teste","weightKg":1200,"initialPrice":10000}'
 ```
 
-Criar leilao:
+Criar leilão:
 
 ```bash
 curl -X POST http://localhost:8080/v1/auctions \
@@ -250,7 +326,7 @@ curl http://localhost:8080/v1/bids/auctions/<auction-id>/best \
   -H "Authorization: Bearer <token>"
 ```
 
-Fechar leilao:
+Fechar leilão:
 
 ```bash
 curl -X PATCH http://localhost:8080/v1/auctions/<auction-id>/close \
@@ -265,7 +341,7 @@ GET /v1/analytics/bids
 GET /v1/analytics/carriers
 ```
 
-## Notificacoes em tempo real
+## Notificações em tempo real
 
 WebSocket:
 
@@ -273,23 +349,40 @@ WebSocket:
 ws://localhost:8083?auction=<auction-id>
 ```
 
-Tambem ha notificacoes globais para clientes conectados sem filtro de leilao.
+Também há notificações globais para clientes conectados sem filtro de leilão:
+
+```text
+ws://localhost:8083
+```
 
 Eventos:
 
-- `auction.opened`: novo leilao criado.
+- `auction.opened`: novo leilão criado.
 - `bid.validated`: novo menor lance aceito.
-- `auction.closing`: aviso de leilao encerrando.
-- `auction.closed`: leilao encerrado e vencedor definido.
+- `auction.closing`: aviso de leilão encerrando.
+- `auction.closed`: leilão encerrado e vencedor definido.
 
 Regras de visibilidade:
 
-- ADMIN recebe todas as notificacoes.
-- TRANSPORTADORA recebe notificacoes globais e notificacoes dos leiloes em que participa.
-- Uma transportadora nao recebe notificacao de lance de leilao em que nao participa.
+- ADMIN recebe todas as notificações.
+- TRANSPORTADORA recebe notificações globais e notificações dos leilões em que participa.
+- Uma transportadora não recebe notificação de lance de leilão em que não participa.
 - Pop-ups aparecem em qualquer tela.
-- Notificacoes ficam armazenadas no sino do topo direito.
+- Notificações ficam armazenadas no sino do topo direito.
 - Pop-ups podem ser fechados manualmente.
+
+## Persistência de dados
+
+Os dados são duráveis entre reinicializações do ambiente através dos volumes Docker declarados no `docker-compose.yml`:
+
+| Armazenamento | Volume Docker | Dados persistidos |
+| --- | --- | --- |
+| PostgreSQL | `leilao_data` | Usuários, cargas, leilões, lances |
+| MongoDB | `mongo_data` | Auditoria de eventos de negócio |
+| Grafana | `grafana_data` | Configurações e dashboards customizados |
+| Redis | *(em memória)* | Estado do melhor lance — regenerado a cada sessão |
+
+Use `docker compose down -v` apenas para zerar completamente o ambiente.
 
 ## Observabilidade
 
@@ -304,7 +397,7 @@ Prometheus coleta os seguintes alvos:
 | `analytics-service` | `/metrics` |
 | `notification-service` | `/metrics` |
 
-Endpoints uteis no host:
+Endpoints úteis no host:
 
 ```text
 Prometheus: http://localhost:9090
@@ -323,27 +416,27 @@ Datasource provisionado:
 infra/grafana/provisioning/datasources/prometheus.yml
 ```
 
-Metricas cobertas:
+Métricas cobertas:
 
-- saude dos servicos;
-- requisicoes HTTP;
-- latencia;
+- saúde dos serviços;
+- requisições HTTP;
+- latência;
 - erros;
-- metricas JVM;
-- metricas de lances;
-- eventos e conexoes WebSocket do `notification-service`;
+- métricas JVM;
+- métricas de lances;
+- eventos e conexões WebSocket do `notification-service`;
 - rotas do `api-gateway`;
-- agregacoes do `analytics-service`.
+- agregações do `analytics-service`.
 
 ## Testes
 
-Testes unitarios e de integracao por servico:
+Testes unitários e de integração por serviço:
 
 ```bash
-cd services/auction-service && mvn test
-cd services/bid-service && mvn test
-cd services/auth-service && mvn test
-cd services/api-gateway && mvn test
+cd services/auction-service   && mvn test
+cd services/bid-service       && mvn test
+cd services/auth-service      && mvn test
+cd services/api-gateway       && mvn test
 cd services/notification-service && npm test
 cd services/analytics-service && pytest
 ```
@@ -365,28 +458,34 @@ docker compose --profile k6 run --rm k6 run /scripts/scenarios/soak.js
 
 Validações realizadas durante a entrega:
 
-- fluxo de autenticacao com JWT;
-- criacao de carga e leilao;
-- envio de lances validos e invalidos;
-- concorrencia de lances;
-- fechamento de leilao com vencedor;
-- rejeicao de lances apos fechamento;
-- persistencia em PostgreSQL;
+- fluxo de autenticação com JWT;
+- criação de carga e leilão;
+- envio de lances válidos e inválidos;
+- concorrência de lances;
+- fechamento de leilão com vencedor;
+- rejeição de lances após fechamento;
+- persistência em PostgreSQL;
 - auditoria em MongoDB;
 - cache de melhor lance em Redis;
 - fila RabbitMQ;
 - Redis Pub/Sub e WebSocket;
 - dashboards Grafana e targets Prometheus;
-- frontend com login, dashboard, sala de leilao, historico, admin e configuracoes.
+- frontend com login, dashboard, sala de leilão, histórico, admin e configurações.
 
-## Estrutura do repositorio
+## Estrutura do repositório
 
 ```text
 .
 ├── docker-compose.yml
+├── README.md
+├── INTEGRACAO_FRONTEND.md
 ├── docs
 ├── frontend
 │   └── bidflow-arena-main
+│       └── src
+│           ├── routes        ← login, dashboard, auction.$id, admin, settings
+│           ├── hooks         ← useAuctions, useCarriers, useWebSocket
+│           └── lib           ← store (Zustand), api, mock-data
 ├── infra
 │   ├── grafana
 │   ├── mongodb
@@ -397,18 +496,19 @@ Validações realizadas durante a entrega:
 │   ├── auth-service
 │   ├── auction-service
 │   ├── bid-service
+│   │   └── src/main/resources/scripts/compare_and_set_best_bid.lua
 │   └── notification-service
 └── tests
     ├── e2e
     └── k6
 ```
 
-## Documentacao complementar
+## Documentação complementar
 
-- `INTEGRACAO_FRONTEND.md`: detalhes da integracao do frontend.
-- `MERGE_PR_COMMANDS.md`: comandos historicos de merge usados durante a entrega.
-- `docs/run-locally.md`: guia de execucao local.
-- `docs/test-dependencies.md`: dependencias de testes.
+- `INTEGRACAO_FRONTEND.md`: detalhes da integração do frontend.
+- `MERGE_PR_COMMANDS.md`: comandos históricos de merge usados durante a entrega.
+- `docs/run-locally.md`: guia de execução local.
+- `docs/test-dependencies.md`: dependências de testes.
 - `docs/git-workflow.md`: fluxo de Git.
 - `docs/entrega-2.md`: resumo da entrega anterior.
 
@@ -416,22 +516,22 @@ Validações realizadas durante a entrega:
 
 Implementado:
 
-- arquitetura distribuida com microsservicos;
+- arquitetura distribuída com microsserviços;
 - API Gateway;
-- autenticacao JWT;
-- leilao reverso de fretes;
-- processamento assincrono de lances;
-- controle atomico do menor lance via Redis Lua;
-- notificacoes em tempo real;
+- autenticação JWT;
+- leilão reverso de fretes;
+- processamento assíncrono de lances;
+- controle atômico do menor lance via Redis Lua;
+- notificações em tempo real;
 - frontend funcional para ADMIN e TRANSPORTADORA;
 - dashboard administrativo e dashboard de transportadora;
-- historico de leilao;
-- configuracoes de perfil;
+- histórico de leilão;
+- configurações de perfil;
 - auditoria em MongoDB;
 - analytics em FastAPI;
 - observabilidade com Prometheus e Grafana;
 - testes automatizados e scripts de carga.
 
-Observacao sobre gRPC:
+Observação sobre gRPC:
 
-O enunciado sugeria gRPC ou equivalente. Esta implementacao usa HTTP/JSON via API Gateway, RabbitMQ, Redis e WebSocket como composicao equivalente para procedimentos remotos, concorrencia, ordenacao, estado compartilhado e broadcast em tempo real.
+O enunciado sugeria gRPC ou equivalente. Esta implementação usa HTTP/JSON via API Gateway, RabbitMQ, Redis e WebSocket como composição equivalente para procedimentos remotos, concorrência, ordenação, estado compartilhado e broadcast em tempo real.
