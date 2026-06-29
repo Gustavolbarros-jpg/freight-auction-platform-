@@ -92,14 +92,7 @@ public class AuthService {
         User user = userRepository.findById(authenticatedUser.userId())
                 .orElseThrow(() -> new UnauthorizedException("User not found"));
 
-        String normalizedEmail = normalizeEmail(request.email());
-        userRepository.findByEmail(normalizedEmail)
-                .filter(existing -> !existing.getId().equals(user.getId()))
-                .ifPresent(existing -> {
-                    throw new ConflictException("Email already registered");
-                });
-
-        user.updateProfile(request.name().trim(), normalizedEmail);
+        user.updateProfile(request.name().trim());
         return toUserResponse(userRepository.save(user));
     }
 

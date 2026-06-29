@@ -103,7 +103,7 @@ interface StoreState {
   addNotification: (notification: NewNotification) => void;
   markNotificationsRead: () => void;
   clearNotifications: () => void;
-  updateProfile: (patch: { name: string; email: string }) => Promise<User>;
+  updateProfile: (patch: { name: string }) => Promise<User>;
   addBidToAuction: (auctionId: string, bid: Bid) => void;
   closeAuction: (auctionId: string) => void;
   createAuction: (params: {
@@ -302,7 +302,6 @@ export const useStore = create<StoreState>((set, get) => ({
     const optimisticUser: User = {
       ...previousUser,
       name: patch.name.trim(),
-      email: patch.email.trim().toLowerCase(),
     };
 
     set((state) => ({
@@ -319,7 +318,6 @@ export const useStore = create<StoreState>((set, get) => ({
       },
       body: JSON.stringify({
         name: optimisticUser.name,
-        email: optimisticUser.email,
       }),
     });
 

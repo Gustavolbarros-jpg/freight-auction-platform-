@@ -50,6 +50,10 @@ public class User {
         this.email = email;
     }
 
+    public void updateProfile(String name) {
+        this.name = name;
+    }
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) {
