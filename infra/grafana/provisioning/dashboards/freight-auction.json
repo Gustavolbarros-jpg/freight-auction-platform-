@@ -106,6 +106,34 @@
           "legendFormat": "{{job}} - {{status}}"
         }
       ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Requisições no API Gateway por rota",
+      "gridPos": { "x": 0, "y": 28, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (uri) (rate(http_server_requests_seconds_count{job=\"api-gateway\"}[1m]))",
+          "legendFormat": "{{uri}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Notification Service — eventos e conexões WebSocket",
+      "gridPos": { "x": 12, "y": 28, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(notification_events_received_total[1m])",
+          "legendFormat": "eventos/s — {{channel}}"
+        },
+        {
+          "expr": "notification_websocket_connections_active",
+          "legendFormat": "conexões ativas"
+        }
+      ]
     }
   ]
 }

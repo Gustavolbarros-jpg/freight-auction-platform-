@@ -194,6 +194,19 @@ services:
     networks:
       - leilao_net
 
+  frontend:
+    build:
+      context: ./frontend/bidflow-arena-main
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_BASE_URL: http://localhost:8080
+    depends_on:
+      - api-gateway
+      - notification-service
+    networks:
+      - leilao_net
+
   prometheus:
     image: prom/prometheus
     ports:
@@ -205,13 +218,15 @@ services:
       - bid-service
       - auth-service
       - analytics-service
+      - notification-service
+      - api-gateway
     networks:
       - leilao_net
 
   grafana:
     image: grafana/grafana
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin

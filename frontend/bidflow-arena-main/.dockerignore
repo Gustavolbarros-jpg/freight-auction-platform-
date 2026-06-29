@@ -1,0 +1,12 @@
+node_modules
+.output
+.tanstack
+dist
+build
+.vite
+.cache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env
+.env.*

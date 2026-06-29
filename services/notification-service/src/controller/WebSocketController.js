@@ -1,15 +1,20 @@
 const {WebSocketServer, WebSocket} = require('ws');
+const { activeConnections } = require('../metrics');
 
-function createWebSocketServer(port) {
-    const wss = new WebSocketServer({port});
+function createWebSocketServer(serverOrPort) {
+    const wss = typeof serverOrPort === 'number'
+        ? new WebSocketServer({ port: serverOrPort })
+        : new WebSocketServer({ server: serverOrPort });
 
     wss.on('connection', (ws, req) => {
         const params = new URLSearchParams(req.url.replace('/?', ''));
         ws.auctionId = params.get('auction');
 
+        activeConnections.inc();
         console.log(`Cliente conectado no leilao: ${ws.auctionId}`);
 
         ws.on('close', () => {
+            activeConnections.dec();
             console.log(`Cliente desconectado do leilao: ${ws.auctionId}`);
         });
     });
